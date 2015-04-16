@@ -26,7 +26,7 @@ Davide Mottin, Alice Marascu, Senjuti Basu Roy, Gautam Das, Themis Palpanas, and
 
 ##Required libraries
 
-The framework requires the [ExecUtils](https://github.com/mutandon/ExecutionUtilities) to run. 
+The framework requires the [ExecUtils v2.0](https://github.com/mutandon/ExecutionUtilities/releases/tag/v2.0) to run. 
 
 ##Version and details
 
