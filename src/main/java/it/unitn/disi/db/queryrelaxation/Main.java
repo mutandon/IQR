@@ -28,6 +28,6 @@ import eu.unitn.disi.db.command.global.CommandRunner;
  */
 public class Main {
     public static void main(String[] args) {
-        CommandRunner.run(args);
+        CommandRunner.run(args); 
     }
 }

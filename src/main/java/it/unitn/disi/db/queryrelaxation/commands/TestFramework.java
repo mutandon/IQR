@@ -22,7 +22,7 @@ package it.unitn.disi.db.queryrelaxation.commands;
 import eu.unitn.disi.db.command.CommandInput;
 import eu.unitn.disi.db.command.exceptions.ExecutionException;
 import eu.unitn.disi.db.command.global.Command;
-import eu.unitn.disi.db.command.util.StopWatch;
+import eu.unitn.disi.db.mutilities.StopWatch;
 import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.PreferenceFunction;
 import it.unitn.disi.db.queryrelaxation.model.Prior;
@@ -38,10 +38,11 @@ import it.unitn.disi.db.queryrelaxation.tree.GreedyRelaxationRandomChoiceTree;
 import it.unitn.disi.db.queryrelaxation.tree.GreedyRelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.HeuristicPruningTree;
 import it.unitn.disi.db.queryrelaxation.tree.OptimalRelaxationTree;
-import it.unitn.disi.db.queryrelaxation.tree.QueryRefinementTree;
+import it.unitn.disi.db.queryrelaxation.tree.comparison.QueryRefinementTree;
 import it.unitn.disi.db.queryrelaxation.tree.RandomRelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree.TreeType;
+import it.unitn.disi.db.queryrelaxation.tree.comparison.InteractiveMinimumFailing;
 import it.unitn.disi.db.queryrelaxation.tree.topk.TopKConvolutionPruningTree;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -78,7 +79,6 @@ public class TestFramework extends Command {
         BooleanMockConnector db;
         Query q = null;
         TreeType type = TreeType.valueOf(optimizationCriteria);;
-        //int[] types = new int[]{3};
         
         try (BufferedReader testReader = new BufferedReader(new FileReader(queryFile))) {
             File directory = new File(dbFolder);
@@ -86,7 +86,7 @@ public class TestFramework extends Command {
                 throw new ExecutionException("Error in opening the directory.");
             }
             if (directory.list() == null) {
-                throw new ExecutionException("Error: the directory" + directory + " does not contains anything.");
+                throw new ExecutionException("Error: the directory %s does not contains anything.", directory);
             }
             String dirs[] = directory.list(), files[];
 
@@ -107,7 +107,7 @@ public class TestFramework extends Command {
                 }
             }
         } catch (IOException ex) {
-            throw new ExecutionException("Error while reading the input file");
+            throw new ExecutionException("Error while reading the input query file");
         }
     }
 
@@ -159,7 +159,7 @@ public class TestFramework extends Command {
                 try {
                     pref = (PreferenceFunction) Class.forName("it.unitn.disi.db.queryrelaxation.model.functions." + preferenceFunction).newInstance();
                 } catch (Exception ex) {
-                    System.out.printf("Failed to load %s with the canonical package it.unitn.disi.db.queryrelaxation.model.functions, trying to load as a fully qualified name");
+                    warn("Failed to load %s with the canonical package it.unitn.disi.db.queryrelaxation.model.functions, trying to load as a fully qualified name");
                     pref = (PreferenceFunction) Class.forName(preferenceFunction).newInstance();
                 }
             }
@@ -222,6 +222,10 @@ public class TestFramework extends Command {
                         tree = new QueryRefinementTree(q);
                         nameOfTree = "QueryRef";
                         break;
+                    case 11: 
+                        tree = new InteractiveMinimumFailing(q); 
+                        nameOfTree = "MFS";
+                        break;
                     default:
                         System.err.println("wrong parameter");
                         return;
@@ -237,9 +241,11 @@ public class TestFramework extends Command {
                 buildingTime += System.currentTimeMillis();
                 queryTime = tree.getTime();
 
-                info("Tree of type: " + nameOfTree + ", root cost: " + tree.getRoot().getCost()
-                        + ", " + tree.getNumberOfNodes() + " nodes, query time: " + queryTime);
+                info("Tree of type: %s, root cost: %f, number of nodes: %d, query time: %d", 
+                        nameOfTree, tree.getRoot().getCost(), tree.getNumberOfNodes(), queryTime);
+                info("Expected number of relaxations: %f", tree.expectedRelaxations());
 
+                
                 //File output = new File("OutputData");
                 //output.mkdir();
                 query = "";
@@ -257,6 +263,7 @@ public class TestFramework extends Command {
                     br.append(tree.toString());
                     br.close();
                 }
+                
                 //DEBUG: to remove
                 //Compute optimal trees
                 optTree = tree.optimalTree(TreeType.MIN_EFFORT);

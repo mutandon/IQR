@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
     
-    /**
+/**
  * This class represents the relaxation tree used to represent all the posssible
  * relaxations. 
  * 
@@ -113,6 +113,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
      * you can call <code>computeCosts</code> function separately.
      * @throws TreeException If the tree construction generates an error.
      */
+    @Override
     public void materialize(boolean computeCosts) throws TreeException {
         computedProbabilities = new HashMap<>();
         time.reset();
@@ -207,7 +208,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
                         q.negatedConstraints().addAll(rn.query.negatedConstraints());
                         //If the query gives us some result the node is not empty
                         results = db.submitQuery(q);
-                        rn.setEmpty(results.length >= cardinality);
+                        rn.setEmpty(results.length >= cardinality); //Even if it is reversed is correct
                         //DAVIDE-MOD-END
                         ((ChoiceNode) n).setNoNode(1 - probability, rn);
                         //((ChoiceNode) n).setNoNode(computeNoProbabilitySecondVersion(q, (RelaxationNode) n.father), rn);
@@ -245,7 +246,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
             visit(nodes, child);
         }
     }
-
+    
     /*
      * Auxiliary function to visit the nodes and store them in a DOT language
      * fashion.
@@ -285,11 +286,12 @@ public class OptimalRelaxationTree extends RelaxationTree {
     
     /*
      * Compute the probability for a user to say no to a relaxation.= (1-pref)*prior
+     * //THIS FORMULA SEEMS INCORRECT
      */
     protected double computeNoProbability(Query q1, RelaxationNode parent) throws ConnectionException {
         //new version
-        double probability = 0.0;
-        Double pr = null;
+        double probability;
+        Double pr;
 
         int t = Utilities.toBooleanQuery(q1);
         long curentTime = System.nanoTime(); //A:
@@ -305,66 +307,6 @@ public class OptimalRelaxationTree extends RelaxationTree {
     protected double computeYesProbability(Query q1, RelaxationNode parent) throws ConnectionException {
         return 1 - computeNoProbability(q1, parent);
     }
-
-    
-    /*
-    @Deprecated
-    protected double computeYesProbability(Query q1) throws ConnectionException {
-        //new version
-        double probability = 0.0;
-        double pr = 0.0;
-        double denominator = 0.0;
-
-        //if the query has relaxed attributes, add them
-        Tuple t = new Tuple(new Query(q1.constraintsAndNegations()));
-
-        //  if(t.size() != root.getQuery().size()) System.out.println("this query is wrong"+q1);; // to erase
-        long curentTime = System.nanoTime(); //A:
-
-        pr = prior.getProbability(t);
-
-        totalTimeIPFInterrogation += System.nanoTime() - curentTime; //A:
-
-
-        denominator = pr;
-        probability = (pr * pref.compute(root.getQuery(), t)) / pr;
-
-        //      System.out.println("Ham("+root.getQuery()+"t)="+pref.compute(root.getQuery(), t)+ " prob="+probability);
-        //      System.out.println("Q1:"+ q1.toString()+ " tuple= "+ t+
-        //             "\nden="+denominator+ "prob="+probability+ "pref ="+ pref.compute(root.getQuery(),t) );
-
-        //if (verbose)
-        //   System.out.printf("Q1: %s, Q: %s, Denominator: %s, Probability: %f, R': %s", q1.toString(), q.toString(), denominator, probability, rQ1.toString());
-        computedProbabilities.put(q1.hashCode(), probability);
-        return probability;
-    }
-
-    @Deprecated
-    protected double computeYesProbabilityOLD(Query q1) throws ConnectionException {
-        // old version
-
-        double probability = 0.0;
-        double pr = 0.0;
-        double denominator = 0.0;
-        //db.connect();
-        List<Tuple> rQ1 = db.queryTupleSpace(q1, true);
-        Query q = root.getQuery();
-
-
-        for (int i = 0; i < rQ1.size(); i++) {
-            pr = prior.getProbability(rQ1.get(i));
-            denominator += pr;
-            probability += (pr * pref.compute(q, rQ1.get(i)));
-        }
-        //db.close();
-        probability /= denominator;
-        if (verbose) {
-            System.out.println(String.format("Q1: %s, Q: %s, Denominator: %s, Probability: %f, R': %s", q1.toString(), q.toString(), denominator, probability, rQ1.toString()));
-        }
-        computedProbabilities.put(q1.hashCode(), probability);
-        return probability;
-    }
-    */
 
     private void computePenalty() {
         switch (type) {
@@ -499,7 +441,6 @@ public class OptimalRelaxationTree extends RelaxationTree {
      * @see RelaxationNode
      */
     public void updateCost(Node n) throws TreeException {
-        //TODO: IF GENERIC CHANGE HERE + 1 -> +c, min -> max
         if (n instanceof ChoiceNode) {
             ChoiceNode cn = (ChoiceNode) n;
             cn.setCost((cn.getYesNode().getCost() + c) * cn.getYesProbability() + (cn.getNoNode().getCost() + c) * cn.getNoProbability());

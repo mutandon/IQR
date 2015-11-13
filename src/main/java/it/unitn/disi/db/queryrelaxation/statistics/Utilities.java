@@ -18,8 +18,10 @@
  */
 package it.unitn.disi.db.queryrelaxation.statistics;
 
+import it.unitn.disi.db.queryrelaxation.exceptions.ConnectionException;
 import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.Query;
+import it.unitn.disi.db.queryrelaxation.model.data.DatabaseConnector;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -29,6 +31,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 /**
@@ -127,4 +131,53 @@ public class Utilities {
         }
         return sb.toString();
     }
+    
+    
+    public static String printLattice(Query q, DatabaseConnector db) 
+            throws ConnectionException 
+    {
+        List<Query> lattice = queryLattice(q); 
+        StringBuilder sb = new StringBuilder(); 
+        int lastSize = (int) q.size();
+        
+        if (!db.isConnected()) {
+            db.connect();
+        }
+        lattice.sort((q1,q2) -> (int)q2.size() - (int)q1.size());
+        for (Query q1 : lattice) {
+            if (q1.size() != lastSize) {
+                sb.append("\n");
+                lastSize = (int) q1.size();
+            }
+            if (db.submitQuery(q1).length == 0) {
+                sb.append("X");
+            }
+            sb.append(q1.getConstraints().toString()).append(" ");
+        }
+        return sb.toString(); 
+    }
+    
+    
+    public static List<Query> queryLattice(Query q) {
+        if (q.size() == 0) {
+            return new ArrayList<>(Collections.singletonList(new Query())); 
+        }
+        
+        List<Query> lattice, newLattice; 
+        
+        Constraint first = q.getConstraints().get(0);
+        Query qSub = (Query) q.clone();
+        qSub.remove(0);
+        lattice = queryLattice(qSub);
+        
+        newLattice = new ArrayList<>(); 
+        newLattice.addAll(lattice);
+        for (Query q1: lattice) {
+            qSub = (Query) q1.clone();
+            qSub.addConstraint(first);
+            newLattice.add(qSub);
+        }   
+        return newLattice; 
+    }
+           
 }

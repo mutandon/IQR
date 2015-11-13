@@ -20,7 +20,7 @@
 
 package it.unitn.disi.db.queryrelaxation.statistics;
 
-import eu.unitn.disi.db.command.util.LoggableObject;
+import eu.unitn.disi.db.mutilities.LoggableObject;
 import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.Query;
 import it.unitn.disi.db.queryrelaxation.model.VectorRandomQuery; //A:

@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package it.unitn.disi.db.queryrelaxation.tree;
+package it.unitn.disi.db.queryrelaxation.tree.comparison;
 
 import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.Query;
@@ -26,6 +26,12 @@ import it.unitn.disi.db.queryrelaxation.model.functions.IPFPrior;
 import it.unitn.disi.db.queryrelaxation.model.functions.IdfFunction;
 import it.unitn.disi.db.queryrelaxation.statistics.EmptyQueryGeneration;
 import it.unitn.disi.db.queryrelaxation.statistics.Utilities;
+import it.unitn.disi.db.queryrelaxation.tree.ChoiceNode;
+import it.unitn.disi.db.queryrelaxation.tree.Node;
+import it.unitn.disi.db.queryrelaxation.tree.RelaxationNode;
+import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree;
+import it.unitn.disi.db.queryrelaxation.tree.SimpleNode;
+import it.unitn.disi.db.queryrelaxation.tree.TreeException;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -150,7 +156,7 @@ public class QueryRefinementTree extends RelaxationTree {
     }
     
     private Map<Constraint, Double> computeRelaxationProbabilities(Query q) {
-        Map<Constraint, Double> probs = new HashMap<Constraint, Double>();
+        Map<Constraint, Double> probs = new HashMap<>();
         int t;
         Query q1;
         double sum = 0.0, prob;
@@ -175,7 +181,7 @@ public class QueryRefinementTree extends RelaxationTree {
      * @return The list of nodes.
      */
     public List<Node> visit() {
-        List<Node> nodes = new ArrayList<Node>();
+        List<Node> nodes = new ArrayList<>();
         visit(nodes, root);
         return nodes;
     }
@@ -199,8 +205,8 @@ public class QueryRefinementTree extends RelaxationTree {
      */
     protected void visit(Set<String> edges, Map<Integer, String> nodes) {
         int index = 1, rindex;
-        LinkedList<Node> queue = new LinkedList<Node>();
-        LinkedList<Integer> roots = new LinkedList<Integer>();
+        LinkedList<Node> queue = new LinkedList<>();
+        LinkedList<Integer> roots = new LinkedList<>();
         SimpleNode sn;
         String shape = "";
         Node n;
@@ -217,7 +223,7 @@ public class QueryRefinementTree extends RelaxationTree {
                 queue.add(child);
                 roots.add(index);
             }
-            nodes.put(rindex, String.format(NODE, rindex, rindex, n.cost >= 0 ? String.format("\\nc=%.3f", n.cost) : "", shape, "white"));
+            nodes.put(rindex, String.format(NODE, rindex, rindex, n.getCost() >= 0 ? String.format("\\nc=%.3f", n.getCost()) : "", shape, "white"));
         }
     }
 
@@ -227,9 +233,10 @@ public class QueryRefinementTree extends RelaxationTree {
      * leaves to the root.
      * @throws TreeException If it is not possible to compute the cost
      */
+    @Override
     public void computeCosts() throws TreeException {
-        LinkedList<Node> stack = new LinkedList<Node>();
-        LinkedList<Integer> currentChild = new LinkedList<Integer>();
+        LinkedList<Node> stack = new LinkedList<>();
+        LinkedList<Integer> currentChild = new LinkedList<>();
         Node currentNode, child;
         Integer actualChild;
 
@@ -264,14 +271,15 @@ public class QueryRefinementTree extends RelaxationTree {
      * (c(no) + 1)*p_no, if it is a <code>RelaxationNode</code> the cost is
      * max (c[q']), where q' is a direct subquery of q.
      * @param n The node to update the cost.
+     * @throws it.unitn.disi.db.queryrelaxation.tree.TreeException
      * @see ChoiceNode
      * @see RelaxationNode
      */
     public void updateCost(Node n) throws TreeException {//A: takes the average of the children costs
         double avg = 0;
-        for (Node child : n.getChildren()) {
-            avg += ((SimpleNode)child).getProbability() * (1 + child.getCost());
-        }
+        avg = n.getChildren().stream()
+                .map((child) -> ((SimpleNode)child).getProbability() * (1 + child.getCost()))
+                .reduce(avg, (accumulator, _item) -> accumulator + _item);
         n.setCost(avg); //Add plus one since we need an interaction step at least
     }
 
@@ -281,7 +289,7 @@ public class QueryRefinementTree extends RelaxationTree {
      */
     @Override
     public long getTime() {
-        return (long)(time.getElapsedTimeMillis()/root.cost);
+        return (long)(time.getElapsedTimeMillis()/root.getCost());
         //return (long)((double)time/(expectedHeight/(double)paths.length));
     }
 
@@ -346,9 +354,9 @@ public class QueryRefinementTree extends RelaxationTree {
      */
     protected Set<String> splitPahts(boolean optimal) {
         String[] paths = printPaths(root, "", optimal).split("\n");
-        Set<String> retval = new HashSet<String>();
-        for (int i = 0; i < paths.length; i++) {
-            retval.add(paths[i].trim());
+        Set<String> retval = new HashSet<>();
+        for (String path : paths) {
+            retval.add(path.trim());
         }
         return retval;
     }
@@ -369,7 +377,7 @@ public class QueryRefinementTree extends RelaxationTree {
             } else {
                 String result = "";
                 for (Node child : n.getChildren()) {
-                    if (!optimal || n.cost == child.cost) { //Take the paths with the cost of the root equal to the cost of the parent - i.e. Opt
+                    if (!optimal || n.getCost() == child.getCost()) { //Take the paths with the cost of the root equal to the cost of the parent - i.e. Opt
                         result += printPaths(child, acc, optimal);
                     }
                 }
@@ -390,17 +398,17 @@ public class QueryRefinementTree extends RelaxationTree {
      * @return An HashSet of nodes that belong to some optimal path
      */
     public Set<Node> getCandidateOptimalNodes() {
-        LinkedList<Node> queue = new LinkedList<Node>();
+        LinkedList<Node> queue = new LinkedList<>();
         ChoiceNode cn;
         Node n;
-        Set<Node> optPath = new HashSet<Node>();
+        Set<Node> optPath = new HashSet<>();
 
         queue.add(root);
         while (!queue.isEmpty()) {
             n = queue.poll();
             if (n instanceof RelaxationNode) {
                 for (Node child : n.getChildren()) {
-                    if (n.cost == child.cost) { //Take the paths with the cost of the root equal to the cost of the parent
+                    if (n.getCost() == child.getCost()) { //Take the paths with the cost of the root equal to the cost of the parent
                         optPath.add(child);
                         queue.add(child);
                         //Break if you want the lefmost

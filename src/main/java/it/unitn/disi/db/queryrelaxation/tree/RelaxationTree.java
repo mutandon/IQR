@@ -19,8 +19,8 @@
  */
 package it.unitn.disi.db.queryrelaxation.tree;
 
-import eu.unitn.disi.db.command.util.LoggableObject;
-import eu.unitn.disi.db.command.util.StopWatch;
+import eu.unitn.disi.db.mutilities.LoggableObject;
+import eu.unitn.disi.db.mutilities.StopWatch;
 import it.unitn.disi.db.queryrelaxation.model.PreferenceFunction;
 import it.unitn.disi.db.queryrelaxation.model.Prior;
 import it.unitn.disi.db.queryrelaxation.model.Query;
@@ -118,6 +118,36 @@ public abstract class RelaxationTree extends LoggableObject {
      */
     protected abstract boolean isMarked(Node n);
     
+    /**
+     * Compute the expected number of relaxations performed by a user using the 
+     * specific tree model
+     * @return The expected number of relaxations
+     */
+    public double expectedRelaxations() {
+        return expectedRelaxations(root);
+    }
+    
+    /*
+     * Internal method to compute the expected number of relaxations at a
+     * certain node
+    */
+    protected double expectedRelaxations(Node n) {
+        if (n.isLeaf()) {
+            return n.getQuery().negatedConstraints().size();
+        }
+        if (n instanceof ChoiceNode) {
+            ChoiceNode cn = (ChoiceNode)n;
+            return cn.getYesProbability() * expectedRelaxations(cn.getYesNode()) 
+                    + cn.getNoProbability() * expectedRelaxations(cn.getNoNode());
+        } else {
+            double sum; 
+            sum = n.getChildren().stream()
+                    .filter((child)  -> optimalityCondition(n, child))
+                    .map((child) -> expectedRelaxations(child))
+                    .reduce(0.0, (accum, _item) -> accum + _item);
+            return sum / n.getChildrenNumber(); 
+        }
+    }
     
     
     @Override

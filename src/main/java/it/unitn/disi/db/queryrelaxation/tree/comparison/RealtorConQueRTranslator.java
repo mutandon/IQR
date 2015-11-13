@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-package it.unitn.disi.db.queryrelaxation.statistics;
+package it.unitn.disi.db.queryrelaxation.tree.comparison;
 
 import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.Pair;
@@ -27,6 +27,7 @@ import it.unitn.disi.db.queryrelaxation.model.PreferenceFunction;
 import it.unitn.disi.db.queryrelaxation.model.Query;
 import it.unitn.disi.db.queryrelaxation.model.data.BooleanMockConnector;
 import it.unitn.disi.db.queryrelaxation.model.functions.IdfFunction;
+import it.unitn.disi.db.queryrelaxation.statistics.EmptyQueryGeneration;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
