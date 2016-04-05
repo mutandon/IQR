@@ -18,6 +18,7 @@
 
 package it.unitn.disi.db.queryrelaxation.tree.topk;
 
+import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.Pair;
 import it.unitn.disi.db.queryrelaxation.model.Query;
 import it.unitn.disi.db.queryrelaxation.tree.ChoiceNode;
@@ -27,8 +28,10 @@ import it.unitn.disi.db.queryrelaxation.tree.TreeException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Pruning Tree with top-k branches.
@@ -40,11 +43,12 @@ public class TopKPruningTree extends PruningTree {
     private final RankingFunction ubRanking;
     
     
-    public TopKPruningTree(Query query, int cardinality, TreeType type, int k) {
+    public TopKPruningTree(Query query, int cardinality, TreeType type, int k, boolean biased) {
         super(query, cardinality, type);
         lbRanking = new RankingFunction(true);
         ubRanking = new RankingFunction(false);
         this.k = k; 
+        this.biased = biased;
     }
     
         
@@ -141,6 +145,25 @@ public class TopKPruningTree extends PruningTree {
                         count--;
                     }                                       
                 }//END FOR
+                if (this.biased && n instanceof ChoiceNode) {
+                    for (int i = candidateSiblings.size() - 1; i >= 0; --i) {
+                        boolean propagate = false;
+                        HashSet<Constraint> changedConstraints = new HashSet<>();
+                        sibling = candidateSiblings.get(i);
+                        bound = (Pair)this.bounds.get(sibling);
+                        if (this.marked.contains(sibling)) continue;
+                        for (int j = i - 1; j >= 0; --j) {
+                            Node otherSibling = candidateSiblings.get(j);
+                            if (this.marked.contains(otherSibling) || (!this.type.isMaximize() || (Double)((Pair)this.bounds.get(otherSibling)).getFirst() <= (Double)bound.getSecond()) && (this.type.isMaximize() || (Double)((Pair)this.bounds.get(otherSibling)).getSecond() >= (Double)bound.getFirst())) continue;
+                            boolean changed = sibling.getQuery().setHard(((ChoiceNode)otherSibling).getConstraint());
+                            boolean bl = propagate = propagate || changed;
+                            if (!changed) continue;
+                            changedConstraints.add(((ChoiceNode)otherSibling).getConstraint());
+                        }
+                        if (!propagate) continue;
+                        this.propagateQuery(sibling, changedConstraints);
+                    }
+                }
             } //END IF
             for (Node sib : siblings) {
                 if (!sib.getChildren().isEmpty()) {
@@ -154,6 +177,21 @@ public class TopKPruningTree extends PruningTree {
        }//END WHILE
     }
 
+    private void propagateQuery(Node node, Set<Constraint> changedConstraints) {
+        assert (node instanceof ChoiceNode);
+        node.getChildren().stream().filter(n -> !this.marked.contains(n)).forEach(n -> {
+            changedConstraints.stream().forEach(constr -> {
+                n.getQuery().setHard(constr);
+            }
+            );
+            n.getChildren().stream().filter(child -> changedConstraints.contains(((ChoiceNode)child).getConstraint())).forEach(child -> {
+                this.marked.add(child);
+            }
+            );
+        }
+        );
+    }
+    
     public int getK() {
         return k;
     }

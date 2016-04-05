@@ -17,6 +17,7 @@
  */
 package it.unitn.disi.db.queryrelaxation.tree.topk;
 
+import it.unitn.disi.db.queryrelaxation.model.Constraint;
 import it.unitn.disi.db.queryrelaxation.model.Pair;
 import it.unitn.disi.db.queryrelaxation.model.PairSecondComparator;
 import it.unitn.disi.db.queryrelaxation.model.Query;
@@ -33,6 +34,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
  * Convolution pruning tree (FastCDR) with top-k proposed branches.
@@ -50,6 +52,14 @@ public class TopKConvolutionPruningTree extends ConvolutionPruningTree {
      * List containing the ranked branches to be expanded. 
      */
     private LinkedList<Pair<Node, Integer>> expandableBranches;
+
+    public TopKConvolutionPruningTree(Query query, int levelL, int noOfBuckets, int cardinality, TreeType type, int k, boolean biased) {
+        super(query, levelL, noOfBuckets, cardinality, type);
+        this.ubRanking = new RankingFunction(false);
+        this.lbRanking = new RankingFunction(true);
+        this.k = k;
+        this.biased = biased;
+    }
 
     private class RankingFunction implements Comparator<Node> {
 
@@ -73,12 +83,10 @@ public class TopKConvolutionPruningTree extends ConvolutionPruningTree {
                 } else if (o1Bounds.getFirst() > o2Bounds.getFirst()) {
                     return 1;
                 }
-            } else {
-                if (o1Bounds.getSecond() < o2Bounds.getSecond()) {
-                    return -1;
-                } else if (o1Bounds.getSecond() > o2Bounds.getSecond()) {
-                    return 1;
-                }
+            } else if (o1Bounds.getSecond() < o2Bounds.getSecond()) {
+                return -1;
+            } else if (o1Bounds.getSecond() > o2Bounds.getSecond()) {
+                return 1;
             }
             return 0;
         }
@@ -200,6 +208,21 @@ public class TopKConvolutionPruningTree extends ConvolutionPruningTree {
         }
     }
 
+    private void propagateQuery(Node node, Set<Constraint> changedConstraints) {
+        assert (node instanceof ChoiceNode);
+        node.getChildren().stream().filter(n -> !this.marked.contains(n)).forEach(n -> {
+            changedConstraints.stream().forEach(constr -> {
+                n.getQuery().setHard(constr);
+            }
+            );
+            n.getChildren().stream().filter(child -> changedConstraints.contains(((ChoiceNode) child).getConstraint())).forEach(child -> {
+                this.marked.add(child);
+            }
+            );
+        }
+        );
+    }
+
     /*
      * Prune method changes because we have to consider k nodes.
      */
@@ -246,6 +269,32 @@ public class TopKConvolutionPruningTree extends ConvolutionPruningTree {
                     }
                 }//END FOR
             } //END IF
+            //Bias pruning
+            if (this.biased && n instanceof ChoiceNode) {
+                for (int i = siblings.size() - 1; i >= 0; --i) {
+                    boolean propagate = false;
+                    Set<Constraint> changedConstraints = new HashSet<>();
+                    sibling = siblings.get(i);
+                    bound = bounds.get(sibling);
+                    if (!marked.contains(sibling)) {
+                        for (int j = i - 1; j >= 0; --j) {
+                            Node otherSibling = siblings.get(j);
+                            if (!marked.contains(otherSibling)
+                                    && ((type.isMaximize() && bounds.get(otherSibling).getFirst() > bound.getSecond())
+                                    || (!type.isMaximize() && bounds.get(otherSibling).getSecond() < bound.getFirst()))) {
+                                final boolean changed = sibling.getQuery().setHard(((ChoiceNode) otherSibling).getConstraint());
+                                propagate = (propagate || changed);
+                                if (changed) {
+                                    changedConstraints.add(((ChoiceNode) otherSibling).getConstraint());
+                                }
+                            }
+                        }
+                        if (propagate) {
+                            this.propagateQuery(sibling, changedConstraints);
+                        }
+                    }
+                }
+            }
             for (Node sib : siblings) {
                 if (!sib.getChildren().isEmpty()) {
                     tree.add(sib.getChildren().iterator().next());

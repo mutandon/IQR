@@ -36,7 +36,7 @@ public class RandomRelaxationTree extends OptimalRelaxationTree {
     }
 
     public RandomRelaxationTree(Query query, int cardinality, TreeType type) {
-        super(query, cardinality, type);
+        super(query, cardinality, type, 1, false);
     }
     
     /**

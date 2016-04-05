@@ -73,6 +73,8 @@ public class TestFramework extends Command {
     private int k; 
     private int[] algorithms;
     private boolean writeTrees;
+    private boolean compareObjectives;
+    private boolean biased;
 
     @Override
     protected void execute() throws eu.unitn.disi.db.command.exceptions.ExecutionException {
@@ -88,20 +90,20 @@ public class TestFramework extends Command {
             if (directory.list() == null) {
                 throw new ExecutionException("Error: the directory %s does not contains anything.", directory);
             }
-            String dirs[] = directory.list(), files[];
 
             info("Cardinality: %d", cardinality);
+            info("Successfully Loaded file: %s", queryFile);
+            
             String line = null;
             String[] splittedLine;
-            info("Successfully Loaded file: %s", queryFile);
             while ((line = testReader.readLine()) != null) {
                 line = line.trim();
-                if (line.length() != 0) {
+                if (line.length() != 0 && !line.startsWith("#")) {
                     splittedLine = line.split("\t");
                     q = EmptyQueryGeneration.stringToQuery(splittedLine[2]);
                     if (q.size() >= minQuerySize && q.size() <= maxQuerySize) {
                         info("Processing query: %s\ndb: %s\nIPF: %s", q.toString(), splittedLine[0], splittedLine[1]);
-                        execute(splittedLine[0], splittedLine[1], q, level, cardinality, algorithms, buckets, k, preferenceFunction, type);
+                        execute(splittedLine[0], splittedLine[1], q, type);
                     }
 
                 }
@@ -116,15 +118,14 @@ public class TestFramework extends Command {
         return "Execute experiments on the framework";
     }
 
-    private void execute(String pathToDb, String pathToIPF, Query q, int L, int cardinality, int[] scalability, int buckets, int k, String preferenceFunction, TreeType type) {
+    private void execute(String pathToDb, String pathToIPF, Query q, TreeType type) {
         int typeOfTree;
         int relaxationNodes;
-        double similarity = 0.0;
         long buildingTime;
         long ipfTime;
         long queryTime;
         short failing;
-        double profit, answers, effort;
+        double profit = -1, answers = -1, effort = -1, expectedRelaxations;
 
         RelaxationTree tree = null, optTree = null;
         BufferedWriter br = null, out = null;
@@ -147,7 +148,7 @@ public class TestFramework extends Command {
         nf.setMinimumIntegerDigits(1);
         nf.setGroupingUsed(false);
 
-        try {
+        try  {
             watch.start();
             db = new BooleanMockConnector(pathToDb);
             db.connect();
@@ -172,9 +173,9 @@ public class TestFramework extends Command {
                 return;
             }
 
-            ////////1. FOR CHECKING ONLY SEVERAL TREES for big size
-            for (int i = 0; i < scalability.length; i++) {
-                typeOfTree = scalability[i];
+            //Check different algorithms
+            for (int i = 0; i < algorithms.length; i++) {
+                typeOfTree = algorithms[i];
                 failing = 1;
 
                 switch (typeOfTree) {
@@ -191,11 +192,11 @@ public class TestFramework extends Command {
                         nameOfTree = "Greedy-Rand";
                         break;
                     case 3: //Brute Force Relaxation Tree
-                        tree = new OptimalRelaxationTree(q, cardinality, type);
+                        tree = new OptimalRelaxationTree(q, cardinality, type, k, biased);
                         nameOfTree = "FullTree";
                         break;
                     case 4: // Pruning Relaxation Tree
-                        tree = new TopKPruningTree(q, cardinality, type, k);
+                        tree = new TopKPruningTree(q, cardinality, type, k, biased);
                         nameOfTree = "FastOpt";
                         break;
                     case 5://Heuristic Pruning Relaxation Tree Strategy.DIFFFIRST
@@ -211,11 +212,11 @@ public class TestFramework extends Command {
                         nameOfTree = "FastOpt-UB";
                         break;
                     case 8: //CDR 
-                        tree = new ConvolutionTree(q, L, buckets, cardinality, type);
+                        tree = new ConvolutionTree(q, level, buckets, cardinality, type);
                         nameOfTree = "CDR";
                         break;
                     case 9: //FastCDR
-                        tree = new TopKConvolutionPruningTree(q, L, buckets, cardinality, type, k);
+                        tree = new TopKConvolutionPruningTree(q, level, buckets, cardinality, type, k, biased);
                         nameOfTree = "FastCDR";
                         break;
                     case 10: //Koudas paper
@@ -264,18 +265,20 @@ public class TestFramework extends Command {
                     br.close();
                 }
                 
-                //DEBUG: to remove
+                expectedRelaxations = tree.expectedRelaxations();
                 //Compute optimal trees
-                optTree = tree.optimalTree(TreeType.MIN_EFFORT);
-                optTree.computeCosts();
-                effort = optTree.getRoot().getCost() / optTree.getRoot().getChildren().size();
-                optTree = tree.optimalTree(TreeType.PREFERRED);
-                optTree.computeCosts();
-                answers = optTree.getRoot().getCost() / optTree.getRoot().getChildren().size();
-                optTree = tree.optimalTree(TreeType.MAX_VALUE_MAX);
-                optTree.computeCosts();
-                profit = optTree.getRoot().getCost() / optTree.getRoot().getChildren().size();
-
+                if (compareObjectives) {
+                    optTree = tree.optimalTree(TreeType.MIN_EFFORT);
+                    optTree.computeCosts();
+                    effort = optTree.getRoot().getCost() / optTree.getRoot().getChildren().size();
+                    optTree = tree.optimalTree(TreeType.PREFERRED);
+                    optTree.computeCosts();
+                    answers = optTree.getRoot().getCost() / optTree.getRoot().getChildren().size();
+                    optTree = tree.optimalTree(TreeType.MAX_VALUE_MAX);
+                    optTree.computeCosts();
+                    profit = optTree.getRoot().getCost() / optTree.getRoot().getChildren().size();
+                }
+                
                 if (writeTrees) {
                     br = new BufferedWriter(new FileWriter(String.format("OutputData%sopt_tree%d_%s.dot", File.separator, typeOfTree, query)));
                     optTree = tree.optimalTree((type == TreeType.MAX_VALUE_MAX || type == TreeType.PREFERRED) ? TreeType.MIN_EFFORT : TreeType.MAX_VALUE_MAX);
@@ -320,7 +323,7 @@ public class TestFramework extends Command {
                         //no of relaxation nodes
                         + relaxationNodes + "\t"
                         //level L
-                        + L + "\t"
+                        + level + "\t"
                         //Time to construct the tree
                         + buildingTime + "\t"
                         //Db interrogation time percentage
@@ -337,8 +340,9 @@ public class TestFramework extends Command {
                         + effort + "\t"
                         + answers + "\t"
                         + profit + "\t"
-                        //similarity and number of buckets
-                        + (typeOfTree == 8 || typeOfTree == 9? (similarity + "\t" + buckets) : "") + "\n"; //total time to interoog the db
+                        + expectedRelaxations + "\t" //Number of expected relaxation 
+                        //number of buckets
+                        + (typeOfTree == 8 || typeOfTree == 9? buckets : "-1") + "\n"; //total time to interoog the db
                 out.append(tmp);
 
                 db.resetTime();//A:
@@ -477,5 +481,23 @@ public class TestFramework extends Command {
             description = "number of relaxations to return to the user")    
     public void setK(int k) {
         this.k = k;
+    }
+    
+    @CommandInput(
+            consoleFormat = "-co", 
+            defaultValue = "false", 
+            mandatory = false, 
+            description = "compare objectives (works only with algorithms described in the paper)")
+    public void setCompareObjectives(final boolean compareObjectives) {
+        this.compareObjectives = compareObjectives;
+    }
+    
+    @CommandInput(
+            consoleFormat = "-bi", 
+            defaultValue = "false", 
+            mandatory = false, 
+            description = "use the biased version of top-k")
+    public void setBiased(final boolean biased) {
+        this.biased = biased;
     }
 }

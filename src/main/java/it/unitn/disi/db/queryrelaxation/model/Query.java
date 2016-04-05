@@ -214,4 +214,34 @@ import java.util.List;
         }
         return hardConstraints;
     }
+    
+    /**
+     * Check if a constraint of the query is hard
+     * @param c The constraint to be checked
+     * @return true if the constraint is hard, false otherwise
+     */
+    public boolean isHard(Constraint c) {
+        return constraints.stream()
+                .filter(constraint -> constraint.isHard())
+                .anyMatch(constraint -> constraint.equals(c));
+    }
+
+    /**
+     * Set the constraint c to be hard (not relaxable)
+     * @param c The input constraint
+     * @return true if it was set to hard false otherwise
+     */
+    public boolean setHard(Constraint c) {
+        for (final Constraint constr : constraints) {
+            if (constr.equals(c)) {
+                if (constr.isHard()) {
+                    return false;
+                }
+                constr.setHard(true);
+                return true;
+            }
+        }
+        return false;
+    }
+    
 }

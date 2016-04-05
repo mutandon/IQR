@@ -68,7 +68,7 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
     
 
     public InteractiveMinimumFailing(Query query, int cardinality, TreeType type) {
-        super(query, cardinality, type);
+        super(query, cardinality, type, 1, false);
     }
 
     public InteractiveMinimumFailing(Query q) {

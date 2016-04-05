@@ -33,7 +33,7 @@ public class GreedyRelaxationRandomChoiceTree extends OptimalRelaxationTree {
     private static final int REPETITIONS_TIME = 100;
 
     public GreedyRelaxationRandomChoiceTree(Query query, int cardinality, TreeType type) {
-        super(query, cardinality, type);
+        super(query, cardinality, type, 1, false);
     }
     
     public GreedyRelaxationRandomChoiceTree(Query query) {

@@ -34,19 +34,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-    
 /**
  * This class represents the relaxation tree used to represent all the posssible
- * relaxations. 
- * 
+ * relaxations.
+ *
  * 24/01/13: Generalized to take into account different cost functions
- * 
+ *
  * @author Davide Mottins
  * @see Node
  * @see RelaxationNode
  * @see ChoiceNode
  */
 public class OptimalRelaxationTree extends RelaxationTree {
+
     /*
      * An edge in dot language
      */
@@ -75,7 +75,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
     /*
      * Parameter c controls the penalization at each step (look at cost-function) 
      */
-    protected double c; 
+    protected double c;
     /*
      * The default tree type is the min effort tree
      */
@@ -84,33 +84,45 @@ public class OptimalRelaxationTree extends RelaxationTree {
      * Represents the cost of an empty query 
      */
     protected Map<Query, Double> cachedResults;
-        
+    /*
+     * k parameter in top-k computation
+     */
+    protected int k;
+    /*
+     * Enable presentation bias for top-k
+     */
+    protected boolean biased;
     
     /**
      * Construct the root node of the tree using the input query. To populate
-     * the tree <code>materialize()</code> or <code>materializeIteratively()</code>
-     * must be called.
+     * the tree <code>materialize()</code> or
+     * <code>materializeIteratively()</code> must be called.
+     *
      * @param query The query to be associated to the root node
      * @param cardinality
      * @param type
      */
-    public OptimalRelaxationTree(Query query, int cardinality, TreeType type) {
+    public OptimalRelaxationTree(Query query, int cardinality, TreeType type, int k, boolean biased) {
         super(query, cardinality, type);
         root = new RelaxationNode(query);
         cachedResults = new HashMap<>();
+        noPrunedNodes = 0;
+        relaxationNodes = 0;
         computePenalty();
         totalTimeIPFInterrogation = 0;//A:
+        this.k = k;
+        this.biased = biased;
     }
 
     public OptimalRelaxationTree(Query q) {
-        this(q, 1, DEFAULT_TYPE);
+        this(q, 1, DEFAULT_TYPE, 1, false);
     }
-    
 
     /**
      * Build the whole tree starting by the root using the database, if any.
-     * @param computeCosts True if you want to also compute costs, otherwise
-     * you can call <code>computeCosts</code> function separately.
+     *
+     * @param computeCosts True if you want to also compute costs, otherwise you
+     * can call <code>computeCosts</code> function separately.
      * @throws TreeException If the tree construction generates an error.
      */
     @Override
@@ -119,9 +131,12 @@ public class OptimalRelaxationTree extends RelaxationTree {
         time.reset();
         time.start();
         buildIteratively();
-        
+
         if (computeCosts) {
             computeCosts();
+            if (k > 1 && biased) {
+                biasPruning();
+            }
         }
         time.stop();
     }
@@ -129,7 +144,9 @@ public class OptimalRelaxationTree extends RelaxationTree {
     /**
      * Materialize the tree in an iterative way. Slower but requires less memory
      * consumption
-     * @throws TreeException If something wrong happens while constructing the tree
+     *
+     * @throws TreeException If something wrong happens while constructing the
+     * tree
      */
     protected void buildIteratively() throws TreeException {
         RelaxationNode rn;
@@ -139,7 +156,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
         LinkedList<Node> queue = new LinkedList<>();
         boolean leaf;
         Map<Integer, Constraint> qConstraints = new HashMap<>();
-        int[] results; 
+        int[] results;
         Node n;
         queue.add(root);
         nodes = 1;
@@ -151,7 +168,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
             while (!queue.isEmpty()) {
                 n = queue.poll();
                 //No further relaxations or only hard constraints. 
-                if (!n.getQuery().getConstraints().isEmpty() && !n.getQuery().allHardConstraints()) { 
+                if (!n.getQuery().getConstraints().isEmpty() && !n.getQuery().allHardConstraints()) {
                     if (n instanceof RelaxationNode) {
                         if (((RelaxationNode) n).isEmpty()) {
                             for (Constraint c : n.getQuery().getConstraints()) {
@@ -166,18 +183,17 @@ public class OptimalRelaxationTree extends RelaxationTree {
                                 }
                             }
                         }
-                    } 
-                    else if (n instanceof ChoiceNode) {
+                    } else if (n instanceof ChoiceNode) {
                         //Build yes node
                         q = (Query) n.getQuery().clone();
                         q.relax(((ChoiceNode) n).getConstraint());
                         rn = new RelaxationNode(q);
 
                         probability = computeYesProbability(q, (RelaxationNode) n.father);
-                        
+
                         ((ChoiceNode) n).setYesNode(probability, rn);
                         rn.setFather(n);
-                        
+
                         results = db.submitQuery(q);
                         //Cardinality constraint acts as a stopping condition
                         rn.setEmpty(results.length < cardinality);
@@ -220,12 +236,13 @@ public class OptimalRelaxationTree extends RelaxationTree {
             }
         } catch (Exception ex) {
             throw new TreeException("Wrong way to build the model, please check", ex);
-        } 
+        }
     }
 
     /**
      * Visit the tree in preorder, i.e. first visit the root and the children,
      * and returns the list of all the nodes
+     *
      * @return The list of nodes.
      */
     public List<Node> visit() {
@@ -246,7 +263,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
             visit(nodes, child);
         }
     }
-    
+
     /*
      * Auxiliary function to visit the nodes and store them in a DOT language
      * fashion.
@@ -283,7 +300,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
             nodes.put(rindex, String.format(NODE, rindex, rindex, n.cost >= 0 ? String.format("\\nc=%.4g", n.cost) : "", shape, isMarked(n) ? "red" : "white"));
         }
     }
-    
+
     /*
      * Compute the probability for a user to say no to a relaxation.= (1-pref)*prior
      * //THIS FORMULA SEEMS INCORRECT
@@ -297,10 +314,11 @@ public class OptimalRelaxationTree extends RelaxationTree {
         long curentTime = System.nanoTime(); //A:
         pr = prior.getProbability(t);
         totalTimeIPFInterrogation += System.nanoTime() - curentTime; //A:
-        if (type == TreeType.PREFERRED)
+        if (type == TreeType.PREFERRED) {
             probability = (1 - pref.compute(query, t)) * pr;
-        else
+        } else {
             probability = (1 - pref.compute(parent.getQuery(), t)) * pr;
+        }
         return probability;
     }
 
@@ -312,21 +330,22 @@ public class OptimalRelaxationTree extends RelaxationTree {
         switch (type) {
             case MAX_VALUE_AVG:
             case MAX_VALUE_MAX:
-            case PREFERRED: 
+            case PREFERRED:
                 c = 0;
                 break;
-            case MIN_EFFORT : 
+            case MIN_EFFORT:
                 c = 1;
                 break;
             default:
                 throw new AssertionError();
         }
     }
-    
+
     /**
-     * Compute costs in a bottom-up iterative fashion traversing the tree in pre-order
-     * and updating the costs, using <code>updatetCost</code> function from the
-     * leaves to the root.
+     * Compute costs in a bottom-up iterative fashion traversing the tree in
+     * pre-order and updating the costs, using <code>updatetCost</code> function
+     * from the leaves to the root.
+     *
      * @throws TreeException If it is not possible to compute the cost
      */
     @Override
@@ -364,60 +383,63 @@ public class OptimalRelaxationTree extends RelaxationTree {
             throw new TreeException("Error on cost computation", ex);
         }
     }
+
     /**
-     * Leaf cost is computed differently among different cost function. The static
-     * value-based function use the value to get the benefit of selecting one
-     * value instead of another
-     * 
+     * Leaf cost is computed differently among different cost function. The
+     * static value-based function use the value to get the benefit of selecting
+     * one value instead of another
+     *
      * @param n The leaf node to compute
      * @throws ConnectionException In case the database is not available.
      */
     protected void computeLeafCost(RelaxationNode n) throws ConnectionException {
-        assert n.isLeaf() : "Node must be a leaf"; 
-        Pair<int[],double[]> resultSet;
+        assert n.isLeaf() : "Node must be a leaf";
+        Pair<int[], double[]> resultSet;
         //double max = 0; 
         double cost = 0;
         Query q = new Query(n.query.getConstraints());
-        
+
         if (!n.isEmpty()) {
             switch (type) {
                 case MAX_VALUE_AVG:
-                    if (cachedResults.containsKey(q))
+                    if (cachedResults.containsKey(q)) {
                         cost = cachedResults.get(q);
-                    else {
+                    } else {
                         resultSet = db.resultsAndBenefits(q);
-                        double sum = 0; 
+                        double sum = 0;
                         for (double t : resultSet.getSecond()) {
                             sum += t;
                         }
-                        cost = resultSet.getFirst().length != 0? sum/resultSet.getFirst().length : 0;
+                        cost = resultSet.getFirst().length != 0 ? sum / resultSet.getFirst().length : 0;
                         cachedResults.put(q, cost);
                     }
-                    break;  
-                case MAX_VALUE_MAX :
-                    if (cachedResults.containsKey(q))
+                    break;
+                case MAX_VALUE_MAX:
+                    if (cachedResults.containsKey(q)) {
                         cost = cachedResults.get(q);
-                    else {
-                        resultSet = db.resultsAndBenefits(n.query); 
+                    } else {
+                        resultSet = db.resultsAndBenefits(n.query);
                         for (double benefit : resultSet.getSecond()) {
-                            if (benefit > cost)
+                            if (benefit > cost) {
                                 cost = benefit;
+                            }
                         }
                         cachedResults.put(q, cost);
                     }
                     break;
-                case MIN_EFFORT : 
+                case MIN_EFFORT:
                     break;
-                case PREFERRED : 
-                    if (cachedResults.containsKey(q))
+                case PREFERRED:
+                    if (cachedResults.containsKey(q)) {
                         cost = cachedResults.get(q);
-                    else {
+                    } else {
                         double preference;
-                        resultSet = db.resultsAndBenefits(n.query); 
+                        resultSet = db.resultsAndBenefits(n.query);
                         for (int t : resultSet.getFirst()) {
                             preference = pref.compute(query, t);
-                            if (preference > cost)
+                            if (preference > cost) {
                                 cost = preference;
+                            }
                         }
                         cachedResults.put(q, cost);
                         //n.setCost(max);                
@@ -429,13 +451,13 @@ public class OptimalRelaxationTree extends RelaxationTree {
         }
         n.setCost(cost);
     }
-    
-    
+
     /**
      * This computes the cost of a node, depending on the cost of the subtrees
      * if the node is a <code>ChoiceNode</code> the cost is (c(yes) + 1)*p_yes +
-     * (c(no) + 1)*p_no, if it is a <code>RelaxationNode</code> the cost is
-     * max (c[q']), where q' is a direct subquery of q. 
+     * (c(no) + 1)*p_no, if it is a <code>RelaxationNode</code> the cost is max
+     * (c[q']), where q' is a direct subquery of q.
+     *
      * @param n The node to update the cost.
      * @throws it.unitn.disi.db.queryrelaxation.tree.TreeException
      * @see RelaxationNode
@@ -448,31 +470,35 @@ public class OptimalRelaxationTree extends RelaxationTree {
             double min = Double.MAX_VALUE;
             double max = -(Double.MAX_VALUE);
             for (Node child : n.getChildren()) {
-                if (child.getCost() < min) 
+                if (child.getCost() < min) {
                     min = child.getCost();
-                if (child.getCost() > max)
+                }
+                if (child.getCost() > max) {
                     max = child.getCost();
+                }
             }
-            n.setCost(type.isMaximize()? max : min);
+            n.setCost(type.isMaximize() ? max : min);
         }
     }
 
     /**
      * Time spent in computations (in milliseconds)
+     *
      * @return The time expressed in milliseconds
      */
     @Override
     public long getTime() {
         long t = time.getElapsedTimeMillis();
         if (type == TreeType.MIN_EFFORT) {
-            t = t/(long)root.cost;
+            t = t / (long) root.cost;
         }
         return t;
     }
 
-
     /**
-     * A method to represent the actual tree in a string encoded in Graphviz DOT language
+     * A method to represent the actual tree in a string encoded in Graphviz DOT
+     * language
+     *
      * @return A string representing the tree
      * @see <a href="http://www.graphviz.org/">Graphviz</a>
      */
@@ -498,14 +524,16 @@ public class OptimalRelaxationTree extends RelaxationTree {
 
     /**
      * Return the number of pruned nodes
+     *
      * @return Number of pruned nodes
      */
-    public int getNoPrunedNodes() { 
+    public int getNoPrunedNodes() {
         return this.noPrunedNodes;
     }
 
     /**
      * Return the number of relaxation nodes
+     *
      * @return Number of relaxation nodes
      */
     public int getRelaxationNodes() {
@@ -514,9 +542,10 @@ public class OptimalRelaxationTree extends RelaxationTree {
 
     /**
      * Return the total time spent in interrogating the IPF
-     * @return 
+     *
+     * @return
      */
-    public long getTotalTimeIPFInterrogation() { 
+    public long getTotalTimeIPFInterrogation() {
         return this.totalTimeIPFInterrogation;
     }
 
@@ -527,37 +556,35 @@ public class OptimalRelaxationTree extends RelaxationTree {
     public void resetTime() {
         this.totalTimeIPFInterrogation = 0;
     }
-    
+
     /**
-     * Produce an HashSet of strings with all the optimal paths of the tree. 
-     * The path has syntax
-     * 
-     * path := constraint\[choice\]*
-     * constraint := STRING
-     * choice := Y|N
-     * 
+     * Produce an HashSet of strings with all the optimal paths of the tree. The
+     * path has syntax
+     *
+     * path := constraint\[choice\]* constraint := STRING choice := Y|N
+     *
      * To signal all possible choices.
+     *
      * @return a HashSet containing the paths
      */
     public Set<String> optimalPaths() {
         return splitPahts(true);
     }
-    
+
     /**
-     * Produce an HashSet of strings with all the paths of the tree. 
-     * The path has syntax
-     * 
-     * path := constraint\[choice\]*
-     * constraint := STRING
-     * choice := Y|N
-     * 
+     * Produce an HashSet of strings with all the paths of the tree. The path
+     * has syntax
+     *
+     * path := constraint\[choice\]* constraint := STRING choice := Y|N
+     *
      * To signal all possible choices.
+     *
      * @return a HashSet containing the paths
-     */    
+     */
     public Set<String> allPaths() {
         return splitPahts(false);
     }
-    
+
     /*
      * Split the paths produced with method printPaths
      */
@@ -569,7 +596,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
         }
         return retval;
     }
-    
+
     /*
      * Returns the optimal tree associated with the current tree, this methods
      * is useful when you want to compare two optimal trees. 
@@ -580,9 +607,9 @@ public class OptimalRelaxationTree extends RelaxationTree {
      */
     @Override
     public RelaxationTree optimalTree(TreeType tt) throws TreeException {
-        return optimalTree(new OptimalRelaxationTree(query, cardinality, tt));
+        return optimalTree(new OptimalRelaxationTree(query, cardinality, tt, k, biased));
     }
-    
+
     protected RelaxationTree optimalTree(RelaxationTree optTree) throws TreeException {
         LinkedList<Node> queue = new LinkedList<>();
         LinkedList<Node> optQueue = new LinkedList<>();
@@ -591,7 +618,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
             optTree.prior = this.prior;
             optTree.pref = this.pref;
             optTree.db = this.db;
-            
+
             RelaxationNode rn;
             ChoiceNode cnOpt;
             ChoiceNode cnOrig;
@@ -606,38 +633,37 @@ public class OptimalRelaxationTree extends RelaxationTree {
                     if (!nOrig.isLeaf()) {
                         //new code with hard constr stop
                         //DAVIDE-MOD
-                        rn = (RelaxationNode)nOrig;
+                        rn = (RelaxationNode) nOrig;
                         relaxations = rn.getRelaxations();
                         for (String label : relaxations.keySet()) {
                             cnOrig = relaxations.get(label);
                             if (optimalityCondition(nOrig, cnOrig)) {
                                 cnOpt = (ChoiceNode) cnOrig.clone();
                                 cnOpt.setFather(nOpt);
-                                ((RelaxationNode)nOpt).addNode(label, cnOpt);
+                                ((RelaxationNode) nOpt).addNode(label, cnOpt);
                                 queue.add(cnOrig);
                                 optQueue.add(cnOpt);
                             }
                         }
                     }
-                }
-                else if (nOrig instanceof ChoiceNode) {
+                } else if (nOrig instanceof ChoiceNode) {
                     //Build yes node
-                    cnOrig = (ChoiceNode)nOrig;
-                    cnOpt = (ChoiceNode)nOpt;
+                    cnOrig = (ChoiceNode) nOrig;
+                    cnOpt = (ChoiceNode) nOpt;
 
                     //No node
-                    rn = (RelaxationNode)cnOrig.getNoNode().clone();
+                    rn = (RelaxationNode) cnOrig.getNoNode().clone();
                     rn.setFather(cnOpt);
                     cnOpt.setNoNode(cnOrig.getNoProbability(), rn);
                     queue.add(cnOrig.getNoNode());
                     optQueue.add(rn);
 
                     //Yes node
-                    rn = (RelaxationNode)cnOrig.getYesNode().clone();
+                    rn = (RelaxationNode) cnOrig.getYesNode().clone();
                     rn.setFather(cnOpt);
                     cnOpt.setYesNode(cnOrig.getYesProbability(), rn);
-                    queue.add(cnOrig.getYesNode());    
-                    optQueue.add(rn);   
+                    queue.add(cnOrig.getYesNode());
+                    optQueue.add(rn);
                 }
             } //END IF NOT EMPTY QUERY
         } catch (Exception ex) {
@@ -645,8 +671,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
         }
         return optTree;
     }
-    
-    
+
     @Override
     protected boolean optimalityCondition(Node n1, Node n2) {
         return n1.cost == n2.cost;
@@ -659,7 +684,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
     protected boolean isMarked(Node n) {
         return false;
     }
-    
+
     /*
      * Recursive function to produce all the paths separated by a \n
      */
@@ -675,17 +700,18 @@ public class OptimalRelaxationTree extends RelaxationTree {
                     }
                 }
                 return result;
-            }            
+            }
         } else {
             //ChoiceNode cannot be a leaf
-            ChoiceNode cn = (ChoiceNode)n;
-            return printPaths(cn.getYesNode(), acc + cn.getConstraint().getAttributeName() + "|" + "yes" +  "|", optimal) +
-            printPaths(cn.getNoNode(), acc + cn.getConstraint().getAttributeName() + "|" + "no" + "|", optimal);
+            ChoiceNode cn = (ChoiceNode) n;
+            return printPaths(cn.getYesNode(), acc + cn.getConstraint().getAttributeName() + "|" + "yes" + "|", optimal)
+                    + printPaths(cn.getNoNode(), acc + cn.getConstraint().getAttributeName() + "|" + "no" + "|", optimal);
         }
     }
-    
+
     /**
      * Return the candidate relaxation nodes belonging to some Optimal path
+     *
      * @return An HashSet of nodes that belong to some optimal path
      */
     public Set<Node> getCandidateOptimalNodes() {
@@ -708,10 +734,63 @@ public class OptimalRelaxationTree extends RelaxationTree {
             } else if (n instanceof ChoiceNode) {
                 //Add all children of a choice node.
                 queue.addAll(n.getChildren());
-                
+
             }
         }
         return optPath;
+    }
+    
+    /*
+     * Perform pruning in case of biasing
+    */
+    protected void biasPruning() throws TreeException {
+        LinkedList<Node> queue = new LinkedList<>();
+        ArrayList betterNodes = new ArrayList();
+        queue.add(this.root);
+        while (!queue.isEmpty()) {
+            Node n = (Node) queue.poll();
+            if (n instanceof ChoiceNode) {
+                assert (n != this.root);
+                ArrayList<Node> children = new ArrayList<>(n.father.getChildren());
+                ArrayList<Node> validChildren = new ArrayList<>();
+                for (Node child2 : children) {
+                    if (this.isMarked(child2)) {
+                        continue;
+                    }
+                    if (child2.father.getQuery().isHard(((ChoiceNode) child2).getConstraint())) {
+                        boolean isRemoved = child2.father.removeChild(child2);
+                        assert (isRemoved);
+                        child2.setFather(null);
+                        continue;
+                    }
+                    validChildren.add(child2);
+                }
+                validChildren.stream()
+                        .filter(child -> !this.isMarked(child))
+                        .sorted((n1, n2)
+                                -> type.isMaximize() ? -new Double(n1.getCost()).compareTo(n2.getCost()) : new Double(n1.getCost()).compareTo(n2.getCost()))
+                        .limit(k)
+                        .forEach(child -> {
+                            betterNodes.forEach(betterNode -> {
+                                child.getQuery().setHard(((ChoiceNode) betterNode).getConstraint());
+                            });
+                            betterNodes.add(child);
+                            queue.addAll(child.getChildren());
+                        }
+                        );
+                betterNodes.clear();
+            } else {
+                if (n != this.root) {
+                    for (Constraint constr : n.father.query.getHardConstraints()) {
+                        n.query.setHard(constr);
+                    }
+                }
+                if (!n.isLeaf()) {
+                    queue.add(n.getChildren().get(0));
+                }
+            }
+            this.computeCosts();
+        }
     }
 
 }
