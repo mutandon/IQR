@@ -101,6 +101,8 @@ public class OptimalRelaxationTree extends RelaxationTree {
      * @param query The query to be associated to the root node
      * @param cardinality
      * @param type
+     * @param k
+     * @param biased
      */
     public OptimalRelaxationTree(Query query, int cardinality, TreeType type, int k, boolean biased) {
         super(query, cardinality, type);
