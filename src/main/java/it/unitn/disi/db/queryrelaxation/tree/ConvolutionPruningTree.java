@@ -30,7 +30,7 @@ import java.util.Set;
 
 /**
  * Compute the CDR algorithm realizing the first L level of the tree and then 
- * choosing the branch which maximizes the probaility tha the cost is smaller
+ * choosing the branch which maximizes the probability that the cost is smaller
  * than all the other siblings. This methods approximates the distribution of
  * the costs for each node and uses convolution to compute minimum and sum of
  * the distributions.

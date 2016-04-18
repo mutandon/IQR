@@ -226,7 +226,7 @@ public class TestFramework extends Command {
                         break;
                     case 11: //Jannach paper
                         tree = new InteractiveMinimumFailing(q, cardinality, type, true, false); 
-                        nameOfTree = "MFS";
+                        nameOfTree = "InteractiveMFS";
                         break;
                     case 12: //Jannach paper + Our model
                         tree = new ParetoTree(q, cardinality, type);

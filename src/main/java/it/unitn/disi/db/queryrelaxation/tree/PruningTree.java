@@ -597,41 +597,6 @@ public class PruningTree extends OptimalRelaxationTree {
         }
     }
 
-    /**
-     * This computes the cost of a node, depending on the cost of the subtrees
-     * if the node is a <code>ChoiceNode</code> the cost is (c(yes) + 1)*p_yes +
-     * (c(no) + 1)*p_no, if it is a <code>RelaxationNode</code> the cost is max
-     * (c[q']), where q' is a direct subquery of q. Keep into account also
-     * marked nodes
-     *
-     * @param n The node to update the cost.
-     * @throws it.unitn.disi.db.queryrelaxation.tree.TreeException
-     * @see ChoiceNode
-     * @see RelaxationNode
-     */
-    @Override
-    public void updateCost(Node n) throws TreeException {
-        if (n instanceof ChoiceNode) {
-            ChoiceNode cn = (ChoiceNode) n;
-            cn.setCost((cn.getYesNode().getCost() + c) * cn.getYesProbability() + (cn.getNoNode().getCost() + c) * cn.getNoProbability());
-        } else if (n instanceof RelaxationNode) {
-            double min = Double.MAX_VALUE;
-            //double max = -(Double.MAX_VALUE);
-            double max = 0;
-            for (Node child : n.getChildren()) {
-                if (!marked.contains(child)) {
-                    if (child.getCost() < min) {
-                        min = child.getCost();
-                    }
-                    if (child.getCost() > max) {
-                        max = child.getCost();
-                    }
-                }
-            }
-            n.setCost(type.isMaximize() ? max : min);
-        }
-    }
-
     @Override
     protected String printPaths(Node n, String acc, boolean optimal) {
         if (n instanceof RelaxationNode) {

@@ -30,7 +30,7 @@ import java.util.Set;
 
 /**
  * Compute the CDR algorithm realizing the first L level of the tree and then 
- * choosing the branch which maximizes the probaility tha the cost is smaller
+ * choosing the branch which maximizes the probability that the cost is smaller
  * than all the other siblings. This methods approximates the distribution of
  * the costs for each node and uses convolution to compute minimum and sum of
  * the distributions.
@@ -109,13 +109,9 @@ public class ConvolutionTree extends PruningTree {
     protected void constructByLevel() throws TreeException {
         RelaxationNode rn;
         ChoiceNode cn;
-        //long currentTime = 0;
         LinkedList<Node> queue = new LinkedList<>();
         Node n;
         Query q;
-//        marked  = new HashSet<>();
-//        time = 0;
-//        bounds.put(currentRoot, new Pair<>(1.0, query.size()));
         queue.add(currentRoot);
 
         try {
@@ -133,7 +129,7 @@ public class ConvolutionTree extends PruningTree {
 
                         if (n instanceof RelaxationNode) {
                             //1. hard constr stop version
-//                          //DAVIDE-MOD 14/07/2014 - Check constructRelaxationNodes condition
+                            //DAVIDE-MOD 14/07/2014 - Check constructRelaxationNodes condition
                             if (((RelaxationNode) n).isEmpty()) {
                                 for (Constraint c : n.getQuery().getConstraints()) {
                                     if (!c.isHard()) {
@@ -144,7 +140,6 @@ public class ConvolutionTree extends PruningTree {
                                         ((RelaxationNode) n).addNode(c.getAttributeName(), cn);
                                         queue.add(cn);
                                         // Put first upper bounds and lower bounds
-                                        //bounds.put(cn, new Pair<Double, Double>(actualLevel, query.size()));
                                         if (!marked.contains(n)) {
                                             nodes++;
                                         }
@@ -406,7 +401,6 @@ public class ConvolutionTree extends PruningTree {
         }
         if (verbose) {
             System.out.printf("Best root child: %s", ((ChoiceNode) bestRootChild).getYesNode().query);
-            //System.out.println("Convolution-Cost of the root is:" + minProb + " for child:" + bestRootChild);
             System.out.println("Convolution-Cost of the root is:" + maxProb + " for child:" + bestRootChild);
         }
         unconsideredBranches.addAll(bestRootChild.getSiblings());
@@ -813,13 +807,13 @@ public class ConvolutionTree extends PruningTree {
      * @return The path similarity value
      */
     public double optimalPathSimilarity(OptimalRelaxationTree opt) {
-        LinkedList<Node> optQueue = new LinkedList<Node>(), convQueue = new LinkedList<Node>();
+        LinkedList<Node> optQueue = new LinkedList<>(), convQueue = new LinkedList<>();
         Node nOpt, nConv;
         optQueue.add(opt.root);
         convQueue.add(root);
         boolean added;
         Map<String, Node> optRel;
-        Set<Node> pending = new HashSet<Node>();
+        Set<Node> pending = new HashSet<>();
         String attName;
         int maxConvHeight = 0, maxOptHeight = 1;
         while (!optQueue.isEmpty()) {

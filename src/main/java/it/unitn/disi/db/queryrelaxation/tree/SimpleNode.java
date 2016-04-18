@@ -40,7 +40,7 @@ public class SimpleNode extends Node implements Serializable {
     
     public SimpleNode(Query q, String relaxation) {
         query = q;
-        children = new ArrayList<Node>();
+        children = new ArrayList<>();
         this.relaxation = relaxation;
     }
         

@@ -306,7 +306,9 @@ public class QueryRefinementTree extends OptimalRelaxationTree {
      */
     @Override
     public void updateCost(Node n) throws TreeException {
-        double avg = n.getChildren().stream().map(child -> child.getCost()).reduce(0.0, (accumulator, _item) -> accumulator + _item);
+        double avg = n.getChildren().stream()
+                .map(child -> child.getCost() + c)
+                .reduce(0.0, (accumulator, _item) -> accumulator + _item);
         n.setCost(avg / (double)n.getChildrenNumber());
     }    
     
