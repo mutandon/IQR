@@ -26,7 +26,6 @@ import it.unitn.disi.db.queryrelaxation.exceptions.ConnectionException;
 import it.unitn.disi.db.queryrelaxation.model.data.DatabaseConnector;
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

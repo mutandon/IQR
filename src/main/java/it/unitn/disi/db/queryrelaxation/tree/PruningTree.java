@@ -35,10 +35,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A relaxation Tree with pruning capabilities (Davide proposal). The algorithm
+ * A relaxation Tree with pruning capabilities. The algorithm
  * works materializing the tree up to level L and then computing some upper and
  * lower bound for the nodes. The method prunes a subtree using the bounds as an
- * information. A branch should be pruned if the lower buond is not smaller than
+ * information. A branch should be pruned if the lower bound is not smaller than
  * all the other upper bounds.
  *
  * 24/01/13: Generalized to take into account different cost functions, the
@@ -145,29 +145,10 @@ public class PruningTree extends OptimalRelaxationTree {
                     if (!marked.contains(n)) {
 //                        currentTime = System.nanoTime();
                         if (n instanceof RelaxationNode) {
-                            //DAVIDE-MOD
-//                            leaf = false;
-//                            //If it is a no node
-//                            if (n.father != null && ((ChoiceNode) n.father).getNoNode() == n) {
-//                                qConstraints.clear();
-//                                for (Constraint c : n.query.getConstraints()) {
-//                                    qConstraints.put(c.hashCode(), c);
-//                                }
-//                                for (Constraint c : n.father.query.getConstraints()) {
-//                                    if (!c.isHard() && qConstraints.containsKey(c.hashCode()) && qConstraints.get(c.hashCode()).isHard()) {
-//                                        q = new Query();
-//                                        q.addConstraint(c);
-//
-//                                        if (db != null && db.submitQuery(q).length < cardinality) {
-//                                            leaf = true;
-//                                            break;
-//                                        }
-//                                    }
-//                                }
-//                            }
                             //END-DAVIDE-MOD (Modified also the condition below)
                             //DAVIDE: 14/07/2014 kept for memory
-                            if (/* !leaf && */((RelaxationNode) n).isEmpty()) {
+                            if (((RelaxationNode) n).isEmpty()) {
+                                
                                 for (Constraint con : n.getQuery().getConstraints()) {
                                     if (!con.isHard()) {
                                         cn = new ChoiceNode();
@@ -186,16 +167,12 @@ public class PruningTree extends OptimalRelaxationTree {
                                     }
                                 }
                             }
-//                            if (!marked.contains(n)) {
-//                                time += (System.nanoTime() - currentTime);
-//                            }
                         } else if (n instanceof ChoiceNode) {
                             //Build 'yes' node
                             cn = (ChoiceNode) n;
                             queue.add(constructRelaxationNodes(cn, true));
                             //Build 'no' node
                             rn = constructRelaxationNodes(cn, false);
-                            //cn.setNoNode(1 - cn.getYesProbability(), rn);
                             cn.setNoNode(1 - cn.getYesProbability(), rn);
 
                             queue.add(rn);
@@ -206,7 +183,6 @@ public class PruningTree extends OptimalRelaxationTree {
                             //End of the level - Top of the queue is a relaxation node
                             if (queue.peek() instanceof RelaxationNode) {
                                 //Update and prune
-//                            if (++actualLevel == level) {
                                 ++actualLevel;
 
                                 if (writeInfo) {
@@ -249,7 +225,6 @@ public class PruningTree extends OptimalRelaxationTree {
                     count++;
                 }
                 //to erase
-
             }
             if (writeInfo) {
                 appendInfoInAFile("\n_____________\nbuildIteratively done!\n");
@@ -260,6 +235,7 @@ public class PruningTree extends OptimalRelaxationTree {
             throw new TreeException("Wrong way to build the model, please check", ex);
         }
     }
+    
 
     protected RelaxationNode constructRelaxationNodes(ChoiceNode n, boolean yes) throws ConnectionException {
         Query q;
@@ -536,64 +512,6 @@ public class PruningTree extends OptimalRelaxationTree {
         } //END WHILE
     }
 
-//    protected void update(LinkedList<Node> queue) {
-//        //A shallow copy is enough for us.
-//        LinkedList<Node> partialTree = (LinkedList<Node>) queue.clone();
-//        Set<Node> oneChild = new HashSet<Node>();
-//        Node n;
-//        Pair<Double, Double> lbub;
-//        Pair<Double, Double> childBounds;
-//
-//        while (!partialTree.isEmpty()) {
-//            n = partialTree.poll();
-//            if (n != root) {
-//                if (n instanceof RelaxationNode) {
-//                    ChoiceNode father = (ChoiceNode) n.father;
-//                    lbub = bounds.get(father);
-//                    lbub.setFirst(
-//                            father.getYesProbability() * bounds.get(father.getYesNode()).getFirst()
-//                            + father.getNoProbability() * bounds.get(father.getNoNode()).getFirst()); //LB = p_yes * lb(yes_node) + p_no * lb(no_node)
-//                    lbub.setSecond(
-//                            father.getYesProbability() * bounds.get(father.getYesNode()).getSecond()
-//                            + father.getNoProbability() * bounds.get(father.getNoNode()).getSecond()); //UB = p_yes * ub(yes_node) + p_no * ub(no_node)
-//                    if (!partialTree.contains(father)) {
-//                        partialTree.add(father);//enqueue the new node
-//                    }
-//                } else {
-//                    //At least we should have visited one child otherwise we cannot 
-//                    //take the maximum/minimum of the childs ;). 
-//                    if (oneChild.contains(n.father)) {
-//                        lbub = bounds.get(n.father);
-//                    } else {
-//                        if (type.isMaximize())
-//                            lbub = new Pair<Double, Double>(0.0, 0.0);
-//                            //lbub = new Pair<Double, Double>(Double.MIN_VALUE, Double.MIN_VALUE);
-//                        else
-//                            lbub = new Pair<Double, Double>(Double.MAX_VALUE, Double.MAX_VALUE);                        
-//                        oneChild.add(n.father);
-//                    }
-//                    childBounds = bounds.get(n);
-//                    //LB is the min of the lowerbounds
-//                    // MODIFY HERE ----- BUG BUG BUG BUG BUG ... 
-//                    // only the new nodes propagate up and overrides the value in the father
-//                    // this is completeley wrong! 
-//                    if (type.isMaximize()) {
-//                        lbub.setFirst(Math.max(childBounds.getFirst(), lbub.getFirst()));
-//                        //UB is the min of the upperbounds
-//                        lbub.setSecond(Math.max(childBounds.getSecond(), lbub.getSecond()));
-//                    } else {
-//                        lbub.setFirst(Math.min(childBounds.getFirst(), lbub.getFirst()));
-//                        //UB is the min of the upperbounds
-//                        lbub.setSecond(Math.min(childBounds.getSecond(), lbub.getSecond()));
-//                    }
-//                    bounds.put(n.father, lbub);
-//                    if (!partialTree.contains(n.father)) {
-//                        partialTree.add(n.father);
-//                    }
-//                }
-//            } // END IF NOT ROOT
-//        } //END WHILE
-//    }
 
     /*
      * To prune start from the root and then mark the nodes till you get in some
@@ -605,12 +523,6 @@ public class PruningTree extends OptimalRelaxationTree {
         List<Node> siblings;
         Node n, sibling;
 
-//        System.out.printf("Level: %f\n",actualLevel);
-//        for (Node n1 : bounds.keySet()) {
-//            if (n1 instanceof ChoiceNode || n1 == root)
-//                System.out.println(n1.query + "," + bounds.get(n1));
-//        }
-//        System.out.print("\n\n\n");
         tree.add(getCurrentRoot());
         while (!tree.isEmpty()) { //Explore all the nodes
             n = tree.poll();

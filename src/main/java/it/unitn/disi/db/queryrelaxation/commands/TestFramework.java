@@ -43,6 +43,7 @@ import it.unitn.disi.db.queryrelaxation.tree.RandomRelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree.TreeType;
 import it.unitn.disi.db.queryrelaxation.tree.comparison.InteractiveMinimumFailing;
+import it.unitn.disi.db.queryrelaxation.tree.comparison.ParetoTree;
 import it.unitn.disi.db.queryrelaxation.tree.topk.TopKConvolutionPruningTree;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -195,19 +196,19 @@ public class TestFramework extends Command {
                         tree = new OptimalRelaxationTree(q, cardinality, type, k, biased);
                         nameOfTree = "FullTree";
                         break;
-                    case 4: // Pruning Relaxation Tree
+                    case 4: //Pruning Relaxation Tree
                         tree = new TopKPruningTree(q, cardinality, type, k, biased);
                         nameOfTree = "FastOpt";
                         break;
-                    case 5://Heuristic Pruning Relaxation Tree Strategy.DIFFFIRST
+                    case 5: //Heuristic Pruning Relaxation Tree Strategy.DIFFFIRST
                         tree = new HeuristicPruningTree(q, cardinality, type, HeuristicPruningTree.Strategy.DIFFFIRST);
                         nameOfTree = "FastOpt-Diff";
                         break;
-                    case 6://Heuristic Pruning Relaxation Tree Strategy.LBFIRST
+                    case 6: //Heuristic Pruning Relaxation Tree Strategy.LBFIRST
                         tree = new HeuristicPruningTree(q, cardinality, type, HeuristicPruningTree.Strategy.LBFIRST);
                         nameOfTree = "FastOpt-LB";
                         break;
-                    case 7://Heuristic Pruning Relaxation Tree Strategy.UBFIRST
+                    case 7: //Heuristic Pruning Relaxation Tree Strategy.UBFIRST
                         tree = new HeuristicPruningTree(q, cardinality, type, HeuristicPruningTree.Strategy.UBFIRST);
                         nameOfTree = "FastOpt-UB";
                         break;
@@ -220,12 +221,16 @@ public class TestFramework extends Command {
                         nameOfTree = "FastCDR";
                         break;
                     case 10: //Koudas paper
-                        tree = new QueryRefinementTree(q);
+                        tree = new QueryRefinementTree(q, cardinality, type);
                         nameOfTree = "QueryRef";
                         break;
-                    case 11: 
-                        tree = new InteractiveMinimumFailing(q); 
+                    case 11: //Jannach paper
+                        tree = new InteractiveMinimumFailing(q, cardinality, type, true, false); 
                         nameOfTree = "MFS";
+                        break;
+                    case 12: //Jannach paper + Our model
+                        tree = new ParetoTree(q, cardinality, type);
+                        nameOfTree = "FastOptMFS";
                         break;
                     default:
                         System.err.println("wrong parameter");
@@ -281,10 +286,15 @@ public class TestFramework extends Command {
                 
                 if (writeTrees) {
                     br = new BufferedWriter(new FileWriter(String.format("OutputData%sopt_tree%d_%s.dot", File.separator, typeOfTree, query)));
-                    optTree = tree.optimalTree((type == TreeType.MAX_VALUE_MAX || type == TreeType.PREFERRED) ? TreeType.MIN_EFFORT : TreeType.MAX_VALUE_MAX);
-                    optTree.computeCosts();
-                    br.append(optTree.toString());
-                    br.close();
+                    try {
+                        optTree = tree.optimalTree((type == TreeType.MAX_VALUE_MAX || type == TreeType.PREFERRED) ? TreeType.MIN_EFFORT : TreeType.MAX_VALUE_MAX);
+                        optTree.computeCosts();
+                        br.append(optTree.toString());
+                    } catch (Exception ex) {
+                        //
+                    } finally {
+                        br.close();
+                    }
                 }
 
                 out = new BufferedWriter(new FileWriter(outputFile, true));

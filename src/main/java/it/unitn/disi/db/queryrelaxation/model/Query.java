@@ -42,8 +42,8 @@ import java.util.List;
      * Construct an empty query which is the one without any constraint
      */
     public Query() {
-        constraints = new ArrayList<Constraint>();
-        negations = new ArrayList<Constraint>();
+        constraints = new ArrayList<>();
+        negations = new ArrayList<>();
     }
 
     /**
@@ -108,22 +108,16 @@ import java.util.List;
      * @return True if all the constraints of the query are hard, false otherwise
      */
     public boolean allHardConstraints() {
-        for (int i = 0; i < constraints.size(); i++) {
-            if (!constraints.get(i).isHard()) {
-                return false;
-            }
-        }
-        return true;
+        return this.constraints.stream().noneMatch(constraint -> !constraint.isHard());
     }
 
     /**
-     * Return contraints and negations (i.e. the original constraints of the query)
-     * @return The contraints and the negations together
+     * Return constraints and negations (i.e. the original constraints of the query)
+     * @return The constraints and the negations together
      */
     public List<Constraint> constraintsAndNegations() {
         List<Constraint> all = (List<Constraint>) constraints.clone();
         all.addAll(negations);
-
         return all;
     }
 
@@ -161,13 +155,13 @@ import java.util.List;
 
     @Override
     public Object clone() {
-        List<Constraint> newConstraints = new ArrayList<Constraint>(constraints.size());
+        List<Constraint> newConstraints = new ArrayList<>(constraints.size());
         for (int i = 0; i < constraints.size(); i++) {
             newConstraints.add((Constraint) constraints.get(i).clone());
         }
         Query qu = new Query(newConstraints);
 
-        qu.negations = new ArrayList<Constraint>(negations.size());
+        qu.negations = new ArrayList<>(negations.size());
         for (int i = 0; i < negations.size(); i++) {
             qu.negations.add((Constraint) negations.get(i).clone());
         }
@@ -206,12 +200,12 @@ import java.util.List;
      * @return The number of hard constraints
      */
     public List<Constraint> getHardConstraints() {
-        List<Constraint> hardConstraints = new ArrayList<Constraint>();
-        for (int i = 0; i < constraints.size(); i++) {
-            if (constraints.get(i).isHard()) {
-                hardConstraints.add((Constraint)constraints.get(i).clone());
-            }
-        }
+        ArrayList<Constraint> hardConstraints = new ArrayList<>();
+        this.constraints.stream()
+                .filter(constraint -> constraint.isHard())
+                .forEach(constraint -> {
+                    hardConstraints.add((Constraint)constraint.clone());
+                });
         return hardConstraints;
     }
     
@@ -242,6 +236,5 @@ import java.util.List;
             }
         }
         return false;
-    }
-    
+    }   
 }

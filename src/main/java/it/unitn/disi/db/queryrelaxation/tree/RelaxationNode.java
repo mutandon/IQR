@@ -89,7 +89,7 @@ public class RelaxationNode extends Node implements Cloneable, Serializable {
     @Override
     public List<Node> getChildren() {
         if (children == null) {
-            children = new ArrayList<Node>(relaxations.values()); 
+            children = new ArrayList<>(relaxations.values()); 
         }
         return children;
     }

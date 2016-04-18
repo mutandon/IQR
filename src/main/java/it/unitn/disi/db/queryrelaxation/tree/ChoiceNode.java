@@ -27,9 +27,9 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 /**
- * A class representing a choice node that is a node with only two chldren, one
+ * A class representing a choice node that is a node with only two children, one
  * for the yes answer and one for the no answer. Yes and No are the possible
- * choices that represent the case in whihc the user accepts or refuse a relaxation
+ * choices that represent the case in which the user accepts or refuse a relaxation
  * @author Davide Mottin
  */
 public class ChoiceNode extends Node implements Cloneable, Serializable {
@@ -58,7 +58,7 @@ public class ChoiceNode extends Node implements Cloneable, Serializable {
         this(null, null);
     }
      /**
-      * Construct a node setting initial probailities to 0.5
+      * Construct a node setting initial probabilities to 0.5
       * @param yes The yes node of this choice node
       * @param no The no node of this choice node
       */

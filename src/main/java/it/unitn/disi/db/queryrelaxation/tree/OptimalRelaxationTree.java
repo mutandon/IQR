@@ -381,7 +381,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
                     currentChild.push(0);
                 }
             }
-        } catch (Exception ex) {
+        } catch (TreeException | ConnectionException ex) {
             throw new TreeException("Error on cost computation", ex);
         }
     }
@@ -466,21 +466,39 @@ public class OptimalRelaxationTree extends RelaxationTree {
      */
     public void updateCost(Node n) throws TreeException {
         if (n instanceof ChoiceNode) {
-            ChoiceNode cn = (ChoiceNode) n;
-            cn.setCost((cn.getYesNode().getCost() + c) * cn.getYesProbability() + (cn.getNoNode().getCost() + c) * cn.getNoProbability());
+            ChoiceNode cn = (ChoiceNode)n;
+            cn.setCost((cn.getYesNode().getCost() + this.c) * cn.getYesProbability() + (cn.getNoNode().getCost() + this.c) * cn.getNoProbability());
         } else if (n instanceof RelaxationNode) {
             double min = Double.MAX_VALUE;
-            double max = -(Double.MAX_VALUE);
+            double max = 0.0;
+            boolean changed = false;
             for (Node child : n.getChildren()) {
+                if (this.isMarked(child)) continue;
                 if (child.getCost() < min) {
                     min = child.getCost();
+                    changed = true;
                 }
-                if (child.getCost() > max) {
-                    max = child.getCost();
-                }
+                if (child.getCost() <= max) continue;
+                max = child.getCost();
             }
-            n.setCost(type.isMaximize() ? max : min);
+            n.setCost(this.type.isMaximize() ? max : (changed ? min : 0.0));
         }
+//        if (n instanceof ChoiceNode) {
+//            ChoiceNode cn = (ChoiceNode) n;
+//            cn.setCost((cn.getYesNode().getCost() + c) * cn.getYesProbability() + (cn.getNoNode().getCost() + c) * cn.getNoProbability());
+//        } else if (n instanceof RelaxationNode) {
+//            double min = Double.MAX_VALUE;
+//            double max = -(Double.MAX_VALUE);
+//            for (Node child : n.getChildren()) {
+//                if (child.getCost() < min) {
+//                    min = child.getCost();
+//                }
+//                if (child.getCost() > max) {
+//                    max = child.getCost();
+//                }
+//            }
+//            n.setCost(type.isMaximize() ? max : min);
+//        }
     }
 
     /**
@@ -491,7 +509,7 @@ public class OptimalRelaxationTree extends RelaxationTree {
     @Override
     public long getTime() {
         long t = time.getElapsedTimeMillis();
-        if (type == TreeType.MIN_EFFORT) {
+        if (type == TreeType.MIN_EFFORT && root.cost != 0) {
             t = t / (long) root.cost;
         }
         return t;

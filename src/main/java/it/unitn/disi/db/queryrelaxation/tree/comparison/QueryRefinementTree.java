@@ -19,7 +19,9 @@
  */
 package it.unitn.disi.db.queryrelaxation.tree.comparison;
 
+import it.unitn.disi.db.queryrelaxation.exceptions.ConnectionException;
 import it.unitn.disi.db.queryrelaxation.model.Constraint;
+import it.unitn.disi.db.queryrelaxation.model.Pair;
 import it.unitn.disi.db.queryrelaxation.model.Query;
 import it.unitn.disi.db.queryrelaxation.model.data.BooleanMockConnector;
 import it.unitn.disi.db.queryrelaxation.model.functions.IPFPrior;
@@ -28,6 +30,7 @@ import it.unitn.disi.db.queryrelaxation.statistics.EmptyQueryGeneration;
 import it.unitn.disi.db.queryrelaxation.statistics.Utilities;
 import it.unitn.disi.db.queryrelaxation.tree.ChoiceNode;
 import it.unitn.disi.db.queryrelaxation.tree.Node;
+import it.unitn.disi.db.queryrelaxation.tree.OptimalRelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationNode;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.SimpleNode;
@@ -41,7 +44,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -57,7 +59,7 @@ import java.util.logging.Logger;
  * [1] Chaitanya Mishra, Nick Koudas: Interactive query refinement. EDBT 2009:862-873
  * @author Davide Mottin <mottin@disi.unitn.eu>
  */
-public class QueryRefinementTree extends RelaxationTree {
+public class QueryRefinementTree extends OptimalRelaxationTree {
     /*
      * An edge in dot language
      */
@@ -67,10 +69,6 @@ public class QueryRefinementTree extends RelaxationTree {
      * A node in dot language
      */
     protected static final String NODE = "\t\"%d\" [label = \"%d%s\",shape = %s,fillcolor = %s,style=filled];\n";
-    /*
-     * This are the already computed probabilities
-     */
-    protected Map<Integer, Double> computedProbabilities;
 
     private Set<String> nonEmptyQueries = new LinkedHashSet<>(); 
     
@@ -81,8 +79,13 @@ public class QueryRefinementTree extends RelaxationTree {
      * @param query The query to be associated to the root node
      */
     public QueryRefinementTree(Query query) {
-        super(query);
-        root = new SimpleNode(query);
+        this(query, 1, DEFAULT_TYPE);
+    }
+
+    public QueryRefinementTree(Query query, int cardinality, RelaxationTree.TreeType type) {
+        super(query, cardinality, type, 1, false);
+        this.root = new SimpleNode(query);
+        this.cachedResults = new HashMap();
     }
 
     /**
@@ -93,7 +96,6 @@ public class QueryRefinementTree extends RelaxationTree {
      */
     @Override
     public void materialize(boolean computeCosts) throws TreeException {
-        computedProbabilities = new HashMap<>();
         time.reset();
         time.start();
         buildIteratively();
@@ -180,6 +182,7 @@ public class QueryRefinementTree extends RelaxationTree {
      * and returns the list of all the nodes
      * @return The list of nodes.
      */
+    @Override
     public List<Node> visit() {
         List<Node> nodes = new ArrayList<>();
         visit(nodes, root);
@@ -226,6 +229,29 @@ public class QueryRefinementTree extends RelaxationTree {
             nodes.put(rindex, String.format(NODE, rindex, rindex, n.getCost() >= 0 ? String.format("\\nc=%.3f", n.getCost()) : "", shape, "white"));
         }
     }
+    
+    protected void computeLeafCostSimple(Node n) throws ConnectionException {
+        assert (n.isLeaf());
+        double cost = 0.0;
+        switch (this.type) {
+            case MIN_EFFORT: {
+                break;
+            }
+            case PREFERRED: {
+                Pair<int[], double[]> resultSet = this.db.resultsAndBenefits(n.getQuery());
+                for (int t : resultSet.getFirst()) {
+                    double preference = this.pref.compute(this.query, t);
+                    if (preference <= cost) continue;
+                    cost = preference;
+                }
+                break;
+            }
+            default: {
+                throw new AssertionError((Object)"Wrong type");
+            }
+        }
+        n.setCost(cost);
+    }
 
     /**
      * Compute costs in a bottom-up iterative fashion traversing the tree in pre-order
@@ -237,33 +263,36 @@ public class QueryRefinementTree extends RelaxationTree {
     public void computeCosts() throws TreeException {
         LinkedList<Node> stack = new LinkedList<>();
         LinkedList<Integer> currentChild = new LinkedList<>();
-        Node currentNode, child;
-        Integer actualChild;
-
-        //Idea to optimize: have a stack to get the next child to visit --
+        Node currentNode, child; 
+        Integer actualChild; 
+        
         stack.push(root);
         currentChild.push(0);
         try {
             while (!stack.isEmpty()) {
-                currentNode = stack.peek();
+                currentNode = (Node)stack.peek();
                 actualChild = currentChild.pop();
                 if (currentNode.isLeaf()) {
                     stack.pop();
-                    currentNode.setCost(0);
-                } else if (currentNode.getChildren().size() <= actualChild) {//Visited all the childs
-                    stack.pop();
-                    updateCost(currentNode);
-                } else {
-                    child = currentNode.getChildren().get(actualChild);
-                    currentChild.push(actualChild + 1);
-                    stack.push(child);
-                    currentChild.push(0);
+                    this.computeLeafCostSimple(currentNode);
+                    continue;
                 }
+                if (currentNode.getChildren().size() <= actualChild) {
+                    stack.pop();
+                    this.updateCost(currentNode);
+                    continue;
+                }
+                child = currentNode.getChildren().get(actualChild);
+                currentChild.push(actualChild + 1);
+                stack.push(child);
+                currentChild.push(0);
             }
-        } catch (Exception ex) {
+        }
+        catch (Exception ex) {
             throw new TreeException("Error on cost computation", ex);
         }
     }
+    
 
     /**
      * This computes the cost of a node, depending on the cost of the subtrees
@@ -275,91 +304,11 @@ public class QueryRefinementTree extends RelaxationTree {
      * @see ChoiceNode
      * @see RelaxationNode
      */
-    public void updateCost(Node n) throws TreeException {//A: takes the average of the children costs
-        double avg = 0;
-        avg = n.getChildren().stream()
-                .map((child) -> ((SimpleNode)child).getProbability() * (1 + child.getCost()))
-                .reduce(avg, (accumulator, _item) -> accumulator + _item);
-        n.setCost(avg); //Add plus one since we need an interaction step at least
-    }
-
-    /**
-     * Time spent in computations (in milliseconds)
-     * @return The time expressed in milliseconds
-     */
     @Override
-    public long getTime() {
-        return (long)(time.getElapsedTimeMillis()/root.getCost());
-        //return (long)((double)time/(expectedHeight/(double)paths.length));
-    }
-
-
-    /**
-     * A method to represent the actual tree in a string encoded in Graphviz DOT language
-     * @return A string representing the tree
-     * @see <a href="http://www.graphviz.org/">Graphviz</a>
-     */
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        Set<String> tree = new LinkedHashSet<String>();
-        Map<Integer, String> costs = new LinkedHashMap<Integer, String>();
-
-        visit(tree, costs);
-        sb.append("digraph relaxation_graph {\n");
-        sb.append("\tsize=\"8,5\"\n");
-        for (Integer cost : costs.keySet()) {
-            sb.append(costs.get(cost));
-        }
-        for (String node : tree) {
-            sb.append(node);
-        }
-        sb.append("}\n");
-
-        return sb.toString();
-    }
-
-    /**
-     * Produce an HashSet of strings with all the optimal paths of the tree. 
-     * The path has syntax
-     * 
-     * path := constraint\[choice\]*
-     * constraint := STRING
-     * choice := Y|N
-     * 
-     * To signal all possible choices.
-     * @return a HashSet containing the paths
-     */
-    public Set<String> optimalPaths() {
-        return splitPahts(true);
-    }
-    
-    /**
-     * Produce an HashSet of strings with all the paths of the tree. 
-     * The path has syntax
-     * 
-     * path := constraint\[choice\]*
-     * constraint := STRING
-     * choice := Y|N
-     * 
-     * To signal all possible choices.
-     * @return a HashSet containing the paths
-     */    
-    public Set<String> allPaths() {
-        return splitPahts(false);
-    }
-    
-    /*
-     * Split the paths produced with method printPaths
-     */
-    protected Set<String> splitPahts(boolean optimal) {
-        String[] paths = printPaths(root, "", optimal).split("\n");
-        Set<String> retval = new HashSet<>();
-        for (String path : paths) {
-            retval.add(path.trim());
-        }
-        return retval;
-    }
+    public void updateCost(Node n) throws TreeException {
+        double avg = n.getChildren().stream().map(child -> child.getCost()).reduce(0.0, (accumulator, _item) -> accumulator + _item);
+        n.setCost(avg / (double)n.getChildrenNumber());
+    }    
     
     /*
      * Recursive function to produce all the paths separated by a \n
@@ -397,6 +346,7 @@ public class QueryRefinementTree extends RelaxationTree {
      * Return the candidate relaxation nodes belonging to some Optimal path
      * @return An HashSet of nodes that belong to some optimal path
      */
+    @Override
     public Set<Node> getCandidateOptimalNodes() {
         LinkedList<Node> queue = new LinkedList<>();
         ChoiceNode cn;
@@ -428,10 +378,6 @@ public class QueryRefinementTree extends RelaxationTree {
         return nonEmptyQueries;
     }
     
-    @Override
-    public RelaxationTree optimalTree(TreeType tt) throws TreeException {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
     
     public static void main(String[] args) {
         BufferedReader testReader = null;
@@ -497,7 +443,7 @@ public class QueryRefinementTree extends RelaxationTree {
 
     @Override
     protected boolean optimalityCondition(Node father, Node child) {
-        return false; 
+        return true; 
     }
 
     @Override

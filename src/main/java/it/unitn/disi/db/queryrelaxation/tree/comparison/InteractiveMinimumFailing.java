@@ -34,17 +34,11 @@ import it.unitn.disi.db.queryrelaxation.tree.ChoiceNode;
 import it.unitn.disi.db.queryrelaxation.tree.Node;
 import it.unitn.disi.db.queryrelaxation.tree.OptimalRelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.RelaxationNode;
-import it.unitn.disi.db.queryrelaxation.tree.RelaxationTree;
 import it.unitn.disi.db.queryrelaxation.tree.TreeException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * This class adapts and implements the Interactive method based on minimum failing queries
@@ -65,10 +59,16 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
      * Set the backtrack choice as in the original Algorithm
     */
     private boolean backtrack = true; 
+    /*
+     * Use the iqr user model for computing the yes/no probability 
+     */
+    private boolean iqrUserModel = false; 
     
 
-    public InteractiveMinimumFailing(Query query, int cardinality, TreeType type) {
+    public InteractiveMinimumFailing(Query query, int cardinality, TreeType type, boolean backtrack, boolean iqrUserModel) {
         super(query, cardinality, type, 1, false);
+        this.backtrack = backtrack; 
+        this.iqrUserModel = iqrUserModel;
     }
 
     public InteractiveMinimumFailing(Query q) {
@@ -89,52 +89,6 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
     }
     
     
-    /**
-     * Implement the modified QuicXPlain method with the same name in the paper. 
-     * The names are as close as possible as Fig. 8. 
-     * 
-     * @return The preferred conflict of Q
-     */
-    private List<String> mfsQI(List<String> backgroundAtoms, List<String> failingQueryAtoms) 
-            throws ConnectionException 
-    {
-        List<Constraint> queryConstraints = new ArrayList<>();
-        List<String> c1, c2, d1, d2, bgUC1, bgUD1, d1UD2; 
-        Query q;
-        
-        backgroundAtoms.stream().forEach((atom) -> { queryConstraints.add(new Constraint(atom, true)); });
-        q = new Query(queryConstraints);
-        
-        if (failingQueryAtoms.isEmpty() || db.submitQuery(q).length == 0) {
-            return new ArrayList<>(); 
-        }
-        if (failingQueryAtoms.size() == 1) {
-            return failingQueryAtoms;
-        }
-        
-        c1 = failingQueryAtoms.subList(0, failingQueryAtoms.size()/2);
-        c2 = failingQueryAtoms.subList(failingQueryAtoms.size()/2, failingQueryAtoms.size());
-        
-        bgUC1 = new ArrayList<>(backgroundAtoms);
-        bgUC1.addAll(c1);
-        bgUD1 = new ArrayList<>(backgroundAtoms);
-        d1 = mfsQI(bgUC1, c2);
-        bgUD1.addAll(d1);
-        d2 = mfsQI(bgUD1, c1);
-        d1UD2 = new ArrayList<>(d1);
-        d1UD2.addAll(d2);
-        
-        return d1UD2; 
-    }
-
-    /*
-     * Implement the mfsQX in Figure 8
-    */
-    private Collection<String> mfsQX(List<String> orderedAttributes) 
-            throws ConnectionException 
-    {
-        return mfsQI(new ArrayList<>(), orderedAttributes);
-    }
     
     @Override
     public void materialize(boolean computeCosts) throws TreeException {
@@ -177,7 +131,7 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
                 if (!n.getQuery().getConstraints().isEmpty() && !n.getQuery().allHardConstraints()) { 
                     if (n instanceof RelaxationNode) {
                         if (((RelaxationNode) n).isEmpty()) {
-                            constraints = minimalConflicts(n.getQuery());
+                            constraints = MinimumFailingUtils.minimalConflicts(n.getQuery(), attributeRanking, db);
                             //debug("Min conflicts: %s", constraints);
                             for (String constr : constraints) {
                                 cn = new ChoiceNode();
@@ -218,7 +172,7 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
                         //DAVIDE-MOD
                         //DAVIDE-MOD (10/07/2014) - The reasoning is the opposite: 
                         //If it returns no answers removing all the non hard, non empty
-                        //contraints, than it is a leaf, then it is marked nonEmpty 
+                        //constraints, than it is a leaf, then it is marked nonEmpty 
                         //(since we want to be a leaf in the next iteration)
                         q = new Query();
                         for (Constraint c : rn.getQuery().getConstraints()) {
@@ -246,32 +200,17 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
         } 
     }
     
-    private Collection<String> minimalConflicts(Query q) 
-            throws ConnectionException 
-    {
-        Set<String> queryAttributeNames = new HashSet<>();
-        List<String> rankedAttributes; 
-        
-        q.getConstraints().stream()
-                .filter((constr) -> !constr.isHard())
-                .forEach((constr) -> queryAttributeNames.add(constr.getAttributeName()));
-        
-        rankedAttributes = new ArrayList<>();
-        attributeRanking.stream().filter((att) -> queryAttributeNames.contains(att)).forEach((att) -> rankedAttributes.add(att));
-        return mfsQX(rankedAttributes);
-    }
-    
     /*
-     * Even probability? Is this correct? 
+     * Use the model probability if require, otherwise even probability
      */
     @Override
     protected double computeNoProbability(Query q1, RelaxationNode parent) throws ConnectionException {
-        return 0.5;
+        return iqrUserModel? super.computeNoProbability(q1, parent) : 0.5;
     }
 
     @Override
     protected double computeYesProbability(Query q1, RelaxationNode parent) throws ConnectionException {
-        return 0.5;
+        return 1 - computeNoProbability(q1, parent);
     }
 
     /**
@@ -290,11 +229,6 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
                     .map((child) -> child.getCost())
                     .reduce(0., (accumulator, _item) -> accumulator + _item);
             n.setCost(sum/n.getChildrenNumber());
-            if (n == root) 
-            {
-                info("Root cost: %f", sum);
-            }
-
         }
     }
 
@@ -312,12 +246,13 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
                     break;
                 case PREFERRED : 
                     double preference = 0;
-                    resultSet = db.resultsAndBenefits(n.getQuery()); 
-                    if (resultSet.getFirst().length > cardinality) {
-                        preference = pref.compute(q, resultSet.getFirst()[0]);
+                    resultSet = db.resultsAndBenefits(n.getQuery());
+                    for (int t : resultSet.getFirst()) {
+                        preference = pref.compute(query, t);
+                        if (preference > cost) {
+                            cost = preference;
+                        }
                     }
-                    n.setCost(preference);
-                    //n.setCost(max);                
                     break;
                 default:
                     throw new AssertionError("Wrong type");
@@ -334,15 +269,14 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
         this.backtrack = backtrack;
     }
     
-//    @Override
-//    public RelaxationTree optimalTree(TreeType tt) throws TreeException {
-//        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-//    }
-//
-//    @Override
-//    protected boolean isMarked(Node n) {
-//        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-//    }
+    
+    public boolean isIqrUserModel() {
+        return iqrUserModel;
+    }
+
+    public void setIqrUserModel(boolean iqrUserModel) {
+        this.iqrUserModel = iqrUserModel;
+    }
     
     
 }

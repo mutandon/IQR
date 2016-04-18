@@ -19,7 +19,6 @@
  */
 package it.unitn.disi.db.queryrelaxation.model;
 import it.unitn.disi.db.queryrelaxation.exceptions.ConnectionException;
-import it.unitn.disi.db.queryrelaxation.exceptions.DataException;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;

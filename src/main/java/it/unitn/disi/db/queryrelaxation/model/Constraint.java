@@ -73,7 +73,7 @@ public class Constraint implements Serializable {
     }
 
     /**
-     * Set to true if the cosntraint cannot be relaxed in the future
+     * Set to true if the constraint cannot be relaxed in the future
      * @param hard a boolean to harden the constraint
      */
     public void setHard(boolean hard) {

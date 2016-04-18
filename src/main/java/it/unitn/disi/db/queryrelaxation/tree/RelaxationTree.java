@@ -93,7 +93,7 @@ public abstract class RelaxationTree extends LoggableObject {
     public abstract void computeCosts() throws TreeException;
     
     /**
-     * Compute the value of the optimial tree (the tree containing only the best
+     * Compute the value of the optimal tree (the tree containing only the best
      * path given the objective function) with respect to a different objective 
      * function 
      *  
@@ -139,14 +139,13 @@ public abstract class RelaxationTree extends LoggableObject {
             ChoiceNode cn = (ChoiceNode)n;
             return cn.getYesProbability() * expectedRelaxations(cn.getYesNode()) 
                     + cn.getNoProbability() * expectedRelaxations(cn.getNoNode());
-        } else {
-            double sum; 
-            sum = n.getChildren().stream()
-                    .filter((child)  -> optimalityCondition(n, child))
-                    .map((child) -> expectedRelaxations(child))
-                    .reduce(0.0, (accum, _item) -> accum + _item);
-            return sum / n.getChildrenNumber(); 
-        }
+        } 
+        double sum; 
+        sum = n.getChildren().stream()
+                .filter((child)  -> optimalityCondition(n, child))
+                .map((child) -> expectedRelaxations(child))
+                .reduce(0.0, (accum, _item) -> accum + _item);
+        return sum / n.getChildrenNumber();         
     }
     
     

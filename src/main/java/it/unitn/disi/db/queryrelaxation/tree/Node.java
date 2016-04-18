@@ -154,7 +154,7 @@ public abstract class Node implements Serializable {
 
     /**
      * Return the <code>List</code> of children <code>Node</code> associated to this node
-     * @return The <code>List</code> of chlidre of this node
+     * @return The <code>List</code> of chlidren of this node
      */
     public abstract List<Node> getChildren();
 
@@ -167,7 +167,7 @@ public abstract class Node implements Serializable {
     }
     
     /**
-     * Retpresents the node into a string
+     * Represents the node into a string
      * @return The string representation of the node
      */
     @Override

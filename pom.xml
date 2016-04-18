@@ -4,7 +4,7 @@
 
     <groupId>it.unitn.disi.db</groupId>
     <artifactId>IQR</artifactId>
-    <version>2.0</version>
+    <version>2.1</version>
     <packaging>jar</packaging>
 
     <name>IQR</name>
@@ -61,26 +61,6 @@
                     </execution>
                 </executions>
             </plugin>
-<!--            <plugin>
-                <groupId>com.atlassian.maven.plugins</groupId>
-                <artifactId>maven-upload-plugin</artifactId>
-                <version>1.1</version>
-                <executions>
-                    <execution>
-                        <id>upload-jar</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>upload</goal>
-                        </goals>
-                        <configuration>
-                            <resourceSrc>${project.build.directory}/${project.build.finalName}.jar</resourceSrc>
-                            <resourceDest></resourceDest>
-                            <serverId>sleepy</serverId>
-                            <url>scp://sleepy.disi.unitn.eu/home/mottin/QueryRelaxation</url>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>-->
         </plugins>
     </build>
     <dependencies>
