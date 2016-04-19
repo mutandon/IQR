@@ -25,6 +25,7 @@ import it.unitn.disi.db.queryrelaxation.model.PreferenceFunction;
 import it.unitn.disi.db.queryrelaxation.model.Prior;
 import it.unitn.disi.db.queryrelaxation.model.Query;
 import it.unitn.disi.db.queryrelaxation.model.data.DatabaseConnector;
+import java.util.stream.Collectors;
 
 /**
  * This class represents a general relaxation tree used in our experiments as 
@@ -140,12 +141,9 @@ public abstract class RelaxationTree extends LoggableObject {
             return cn.getYesProbability() * expectedRelaxations(cn.getYesNode()) 
                     + cn.getNoProbability() * expectedRelaxations(cn.getNoNode());
         } 
-        double sum; 
-        sum = n.getChildren().stream()
+        return n.getChildren().stream()
                 .filter((child)  -> optimalityCondition(n, child))
-                .map((child) -> expectedRelaxations(child))
-                .reduce(0.0, (accum, _item) -> accum + _item);
-        return sum / n.getChildrenNumber();         
+                .collect(Collectors.averagingDouble((child) -> expectedRelaxations(child)));
     }
     
     

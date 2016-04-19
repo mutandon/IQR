@@ -872,7 +872,7 @@ public class ConvolutionTree extends PruningTree {
      * the paths. 
      */
     protected Map<String, Node> candidateOptimalRelaxations(Node rn) {
-        Map<String, Node> optRel = new HashMap<String, Node>();
+        Map<String, Node> optRel = new HashMap<>();
         for (Node n : rn.getChildren()) {
             if (rn.cost == n.cost) {
                 optRel.put(((ChoiceNode) n).getConstraint().getAttributeName(), n);
