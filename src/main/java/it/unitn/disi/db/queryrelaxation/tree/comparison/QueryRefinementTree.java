@@ -380,68 +380,6 @@ public class QueryRefinementTree extends OptimalRelaxationTree {
         return nonEmptyQueries;
     }
     
-    
-    public static void main(String[] args) {
-        BufferedReader testReader = null;
-        BufferedWriter br = null;
-        String line; 
-        String[] splittedLine; 
-        Query q;
-        BooleanMockConnector db; 
-        QueryRefinementTree tree;
-        File f = new File(args[0]); 
-        System.out.println(f.getAbsoluteFile().getParent());
-        
-        try {
-            testReader = new BufferedReader(new FileReader(f));
-            br = new BufferedWriter(new FileWriter(args[1]));
-            
-            //Extract ipfs and dbs
-            while ((line = testReader.readLine()) != null) {
-                line = line.trim();
-                if (line.length() != 0) {
-                    splittedLine = line.split("\t");
-                    q = EmptyQueryGeneration.stringToQuery(splittedLine[2]);
-                    db = new BooleanMockConnector(f.getAbsoluteFile().getParent()+ File.separator + splittedLine[0]);
-                    db.connect();
-                    tree = new QueryRefinementTree(q);
-                    tree.setDb(db);
-                    tree.setPrior(new IPFPrior(db, f.getAbsoluteFile().getParent() + File.separator + splittedLine[1], q));
-                    tree.setPref(new IdfFunction(db));
-                    tree.setVerbose(false);
-                    tree.materialize(true);
-                    System.out.println(tree.nonEmptyQueries);
-                    for (String neq : tree.nonEmptyQueries) {
-                        br.write(neq + "|");
-                    }
-                    br.newLine();
-                    //for (Constraint c : q.getConstraints()) {
-                        //query += mapping.get(attMap.get(Integer.parseInt(c.getAttributeName()))) + ", ";
-                        //query += c.getAttributeName() + ",";
-                    //}
-                    //query = query.substring(0, query.length() - 2);
-                    //queries.add(query);
-                    System.out.printf("Processing query: %s\ndb: %s\nIPF: %s\n", q.toString(), splittedLine[0], splittedLine[1]);
-                }
-            }
-        } catch (Exception ex) {
-            Logger.getLogger(QueryRefinementTree.class.getName()).log(Level.SEVERE, "An error occurred in reading the test File, message follows", ex);
-        } finally {
-            if (testReader != null) {
-                try {
-                    testReader.close();
-                } catch (IOException ex) {
-                }
-            }
-            if (br != null) {
-                try {
-                    br.close();
-                } catch (IOException ex) {
-                    Logger.getLogger(QueryRefinementTree.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        }
-    }
 
     @Override
     protected boolean optimalityCondition(Node father, Node child) {

@@ -40,6 +40,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -51,10 +52,8 @@ import java.util.logging.Logger;
  */
 public class RealtorConQueRTranslator {
     
-    //private List<String> queries;
     private static List<String> mapping;
     private static final Integer[] DOUBLE_MAPPING = {15,16,19,22,29,30,31,32,34,35,36,37,38,39,40,41,42,43};
-    //private static final String[] NAMES = {"address","state","zipcode","mslid","price","type","area","county","subdivision","year","bedroom ","bath","fullbath","approarea","story","Single house","Living area","Dining area","Kitchen area","Heating features","Air conditioning","intfeatures","External features","extconst","applot","schooldist","bedroomcount","bathroomcount","fence","Deck","Swimming Pool","Waterfront","Smoke Detector","Garage","Parking","Automatic Gates","Porch","Playground","Community Clubhouse","Trees","Courtyard","Sidewalk","Cul-de-Sac","Landscape"};
     private static final String[] NAMES = {"address","state","zipcode","mslid","price","type","area","county","subdivision","year","bedroom ","bath","fullbath","approarea","story","single_house","living_area","dining_area","kitchen_area","heating_features","air_conditioning","intfeatures","external_features","extconst","applot","schooldist","bedroomcount","bathroomcount","fence","deck","swimming_pool","waterfront","smoke_detector","garage","parking","automatic_gates","porch","playground","community_clubhouse","trees","courtyard","sidewalk","cul_de_sac","landscape"};
     private static List<Map<Integer,Integer>> attributeMaps;
     
@@ -71,7 +70,6 @@ public class RealtorConQueRTranslator {
         List<Constraint> constraints;
         int[] tuples;
         List<Pair<Integer,Double>> orderedTuples; 
-        //String basePath = new File(queryFile).getParent();
         Map<Integer,Integer> attMap;
         int type, index;
         BooleanMockConnector db;
@@ -82,9 +80,7 @@ public class RealtorConQueRTranslator {
         String table = isInt? "houseint" : "house";
         Pair<Integer, Double> tuple; 
         
-        //ueries = new ArrayList<String>();
-        //mapping = new ArrayList<String>();
-        attributeMaps = new ArrayList<Map<Integer,Integer>>();
+        attributeMaps = new ArrayList<>();
 
         try {
         
@@ -100,7 +96,7 @@ public class RealtorConQueRTranslator {
                     sb = new StringBuilder();
                     where = new StringBuilder();
                     select = new StringBuilder();
-                    attMap = new HashMap<Integer,Integer>();
+                    attMap = new HashMap<>();
                     query = "";
                     splittedLine = line.split("\t");
                     q = EmptyQueryGeneration.stringToQuery(splittedLine[2]);
@@ -118,7 +114,7 @@ public class RealtorConQueRTranslator {
 
                         @Override
                         public int compare(Pair<Integer, Double> o1, Pair<Integer, Double> o2) {
-                            if (o1.getSecond() == o2.getSecond())
+                            if (Objects.equals(o1.getSecond(), o2.getSecond()))
                                 return 0; 
                             else if (o1.getSecond() > o2.getSecond())
                                 return -1; 
@@ -224,7 +220,7 @@ public class RealtorConQueRTranslator {
         List<String> attributes = null;
         Map<Integer,Integer> attMap;
         try {
-            attributes = new ArrayList<String>();
+            attributes = new ArrayList<>();
             attMap = attributeMaps.get(query);
             for (Integer key : attMap.keySet()) {
                 attributes.add(mapping.get(attMap.get(key)));
@@ -236,9 +232,4 @@ public class RealtorConQueRTranslator {
         return attributes;
                 
     }
-    
-    public static void main(String[] args) {
-        RealtorConQueRTranslator.translate("InputData/dataset_A", "/Users/mutandon/NetBeansProjects/ConQueR/test_query", 5, true);
-    }
-    
 }

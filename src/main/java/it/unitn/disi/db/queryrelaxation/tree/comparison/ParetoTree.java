@@ -74,7 +74,6 @@ public class ParetoTree extends PruningTree {
         ChoiceNode cn;
         LinkedList<Node> queue = new LinkedList<>();
         Node n;
-        Query q;
         Collection<String> constraints; 
 
         bounds = new HashMap<>();
@@ -153,9 +152,5 @@ public class ParetoTree extends PruningTree {
         } catch (ConnectionException | NullPointerException ex) {
             throw new TreeException("Wrong way to build the model, please check", ex);
         }
-    }
-
-    
-    
-    
+    }   
 }

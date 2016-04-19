@@ -88,7 +88,6 @@ public class PruningTree extends OptimalRelaxationTree {
         ChoiceNode cn;
         LinkedList<Node> queue = new LinkedList<>();
         Node n;
-        Query q;
 
         bounds = new HashMap<>();
         marked = new HashSet<>();

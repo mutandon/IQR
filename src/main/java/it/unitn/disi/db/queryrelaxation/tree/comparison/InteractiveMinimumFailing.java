@@ -236,9 +236,7 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
     protected void computeLeafCost(RelaxationNode n) throws ConnectionException {
         assert n.isLeaf() : "Node must be a leaf"; 
         Pair<int[],double[]> resultSet;
-        //double max = 0; 
         double cost = 0;
-        Query q = new Query(n.getQuery().getConstraints());
         
         if (!n.isEmpty()) {
             switch (type) {
@@ -277,6 +275,12 @@ public class InteractiveMinimumFailing extends OptimalRelaxationTree {
     public void setIqrUserModel(boolean iqrUserModel) {
         this.iqrUserModel = iqrUserModel;
     }
-    
-    
+
+    /*
+     * In this tree there is no optimiality condition between father and son. 
+    */
+    @Override
+    protected boolean optimalityCondition(Node father, Node child) {
+        return true; 
+    } 
 }
