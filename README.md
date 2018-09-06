@@ -24,11 +24,11 @@ or, alternatively,
 
 Davide Mottin, Alice Marascu, Senjuti Basu Roy, Gautam Das, Themis Palpanas, and Yannis Velegrakis. 2013. **A probabilistic optimization framework for the empty-answer problem.** *Proc. VLDB Endow. 6, 14 (September 2013)*.
 
-##Required libraries
+## Required libraries
 
 The framework requires the [ExecUtils v2.0](https://github.com/mutandon/ExecutionUtilities/releases/tag/v2.0) to run. 
 
-##Version and details
+## Version and details
 
 This version of the framework includes top-*k* relaxations and cardinality constraints included in a publication under submission. 
 
@@ -36,7 +36,7 @@ It has been optimized to run on boolean databases, although many data models are
 
 Data used in the experiments are available upon request. 
 
-##How it works
+## How it works
 
 The main file to run experiments is *TestFramework*. More details will come in the next revision of this file or upon request. 
 
